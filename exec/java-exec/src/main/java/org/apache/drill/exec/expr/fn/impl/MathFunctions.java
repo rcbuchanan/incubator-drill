@@ -82,6 +82,26 @@ public class MathFunctions{
 
   }
 
+	@FunctionTemplate(name = "factorial", isRandom = true, scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+	public static class Factorial implements DrillSimpleFunc {
+		@Param BigIntHolder a;
+		@Output BigIntHolder out;
+
+		public void setup(RecordBatch b) {
+		}
+
+		public void eval() {
+			long v = 1;
+			for (long i = 1; i <= a.value; i++) {
+				v *= i;
+			}
+			out.value = v;
+		}
+
+	}
+  
+  
+  
   @FunctionTemplate(name = "to_number", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
   public static class ToNumber implements DrillSimpleFunc {
     @Param  VarCharHolder left;

@@ -321,6 +321,40 @@ public class DateTypeFunctions {
             out.value = queryStartTime;
         }
     }
+    
+    @FunctionTemplate(names = "date_trunc", scope = FunctionTemplate.FunctionScope.SIMPLE, nulls=NullHandling.NULL_IF_NULL)
+    public static class DateTruncFunction implements DrillSimpleFunc {
+        @Param VarCharHolder left;
+        @Param TimeStampHolder right;
+        @Output TimeStampHolder out;
+        @Workspace org.joda.time.MutableDateTime dateTime;
+
+        public void setup(RecordBatch incoming) {
+        	dateTime = new org.joda.time.MutableDateTime(org.joda.time.DateTimeZone.UTC);
+        }
+
+        public void eval() {
+        	if (left.toString().equalsIgnoreCase("YEAR")) {
+        		dateTime.setRounding(dateTime.getChronology().year());
+        	} else if (left.toString().equalsIgnoreCase("MONTH")) {
+        		dateTime.setRounding(dateTime.getChronology().monthOfYear());
+        	} else if (left.toString().equalsIgnoreCase("DAY")) {
+        		dateTime.setRounding(dateTime.getChronology().dayOfMonth());
+        	} else if (left.toString().equalsIgnoreCase("HOUR")) {
+        		dateTime.setRounding(dateTime.getChronology().hourOfDay());
+        	} else if (left.toString().equalsIgnoreCase("MINUTE")) {
+        		dateTime.setRounding(dateTime.getChronology().minuteOfHour());
+        	} else if (left.toString().equalsIgnoreCase("SECOND")) {
+        		dateTime.setRounding(dateTime.getChronology().secondOfMinute());
+        	} else {
+                throw new UnsupportedOperationException("date_trunc function supports the following time units: YEAR, MONTH, DAY, HOUR, MINUTE, SECOND");
+        	}
+        	
+        	//out.index = right.index;
+        	dateTime.setMillis(right.value);
+            out.value = dateTime.getMillis();
+        }
+    }
 
     @SuppressWarnings("unused")
     @FunctionTemplate(names = {"date_add", "add"}, scope = FunctionTemplate.FunctionScope.SIMPLE, nulls=NullHandling.NULL_IF_NULL)
