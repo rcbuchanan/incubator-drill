@@ -57,6 +57,7 @@ import org.apache.drill.exec.rpc.RpcException;
 import org.apache.drill.exec.rpc.RpcOutcomeListener;
 import org.apache.drill.exec.rpc.user.UserServer.UserClientConnection;
 import org.apache.drill.exec.server.DrillbitContext;
+import org.apache.drill.exec.server.rest.DrillRoot;
 import org.apache.drill.exec.util.AtomicState;
 import org.apache.drill.exec.util.Pointer;
 import org.apache.drill.exec.work.ErrorHelper;
@@ -253,7 +254,8 @@ public class Foreman implements Runnable, Closeable, Comparable<Object>{
   }
 
   private void runPhysicalPlan(PhysicalPlan plan) {
-
+    DrillRoot.planmap.put(QueryIdHelper.getQueryId(queryId), plan);
+    
     if(plan.getProperties().resultMode != ResultMode.EXEC){
       fail(String.format("Failure running plan.  You requested a result mode of %s and a physical plan can only be output as EXEC", plan.getProperties().resultMode), new Exception());
     }

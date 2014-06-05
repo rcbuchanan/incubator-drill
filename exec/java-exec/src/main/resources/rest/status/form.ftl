@@ -10,46 +10,14 @@
   language governing permissions and limitations under the License. -->
 
 <html>
-<a href="/queries">back</a><br />
+Welcome to Drill! 
+<br />
+<a href="/query/${model}">${model}</a><br />
 
-<pre>
-${model.query}
-</pre> 
-<br /><br />
-<pre>
-${model.plan}
-</pre>
-
-<pre>
-${model.id}
-</pre>
-
-<pre>
-<#list model.getFragmentProfileList() as major>
-	${major.getMajorFragmentId()}
-	<#list major.getMinorFragmentProfileList() as minor>
-		${minor.getState()}
-		${minor.getStartTime()}
-		${minor.getEndTime()}
-		${minor.getMinorFragmentId()}
-		<#list minor.getOperatorProfileList() as op>
-			${op.getSetupNanos()}
-			${op.getProcessNanos()}
-			${op.getOperatorId()}
-			<#list op.getInputProfileList() as input>
-				${input.getRecords()}
-				${input.getBatches()}
-			</#list>
-		</#list>
-	</#list>
-</#list>
-</pre>
-
-
-<pre>
-${model.toString()}
-</pre>
-
-
-
-<html>
+<FORM method="post">
+    <P>
+    <TEXTAREA name="plan"></textarea><BR>
+    <INPUT type="submit" value="Submit"><INPUT type="reset">
+    </P>
+</FORM>
+</html>
