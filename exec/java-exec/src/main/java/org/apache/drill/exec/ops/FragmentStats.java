@@ -30,9 +30,12 @@ public class FragmentStats {
 
 
   private List<OperatorStats> operators = Lists.newArrayList();
-  private final long startTime;
+  private long startTime;
 
   public FragmentStats(MetricRegistry metrics) {
+  }
+  
+  public void fragmentStart() {
     this.startTime = System.currentTimeMillis();
   }
 

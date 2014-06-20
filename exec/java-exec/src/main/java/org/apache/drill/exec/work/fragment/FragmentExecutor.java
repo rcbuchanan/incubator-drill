@@ -91,6 +91,8 @@ public class FragmentExecutor implements Runnable, CancelableQuery, StatusProvid
       internalFail(new RuntimeException(String.format("Run was called when fragment was in %s state.  FragmentRunnables should only be started when they are currently in awaiting allocation state.", FragmentState.valueOf(state.get()))));
       return;
     }
+    
+    context.getStats().fragmentStart();
 
 
 
