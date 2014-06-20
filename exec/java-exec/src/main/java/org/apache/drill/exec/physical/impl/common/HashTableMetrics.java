@@ -17,7 +17,13 @@
  */
 package org.apache.drill.exec.physical.impl.common;
 
+import java.util.Arrays;
+import java.util.List;
+
 import org.apache.drill.exec.ops.MetricDef;
+import org.apache.drill.exec.proto.beans.CoreOperatorType;
+
+
 
 public enum HashTableMetrics implements MetricDef {
 
@@ -28,6 +34,11 @@ public enum HashTableMetrics implements MetricDef {
   @Override
   public int metricId() {
     return ordinal();
+  }
+
+  public List<CoreOperatorType> supported() {
+    final CoreOperatorType[] types = {};
+    return Arrays.asList(types);
   }
 
 }

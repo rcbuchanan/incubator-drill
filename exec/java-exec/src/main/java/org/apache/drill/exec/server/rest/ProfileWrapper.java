@@ -19,7 +19,6 @@ package org.apache.drill.exec.server.rest;
 
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
-import org.apache.drill.exec.ops.MetricDef;
 import org.apache.drill.exec.ops.MetricRegistry;
 import org.apache.drill.exec.proto.UserBitShared.MajorFragmentProfile;
 import org.apache.drill.exec.proto.UserBitShared.MetricValue;
@@ -35,7 +34,6 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.Locale;
 import java.util.TreeMap;
 
@@ -205,7 +203,7 @@ public class ProfileWrapper {
   public String minorFragmentOperatorProfile(int majorId, MinorFragmentProfile minorFragmentProfile) {
     ArrayList<OperatorProfile> oplist = new ArrayList<OperatorProfile>(minorFragmentProfile.getOperatorProfileList());
     
-    final String[] columns = {"id", "type", "setup", "process", "wait"};
+    final String[] columns = {"id", "type", "setup", "process", "wait", "metrics"};
     TableBuilder builder = new TableBuilder(
         String.format("Minor Fragment #%d-%d Operator Profile", majorId, minorFragmentProfile.getMinorFragmentId()),
         String.format("MinorFragment%d_%dOperatorProfile", majorId, minorFragmentProfile.getMinorFragmentId()),
