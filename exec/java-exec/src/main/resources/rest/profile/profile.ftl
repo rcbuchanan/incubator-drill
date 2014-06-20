@@ -11,6 +11,11 @@
 
 <#include "*/generic.ftl">
 <#macro page_head>
+<link href="/www/style.css" rel="stylesheet">
+
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script src="http://cpettitt.github.io/project/dagre-d3/latest/dagre-d3.js"></script>
+<script src="/www/graph.js"></script>
 </#macro>
 
 <#macro page_body>
@@ -45,17 +50,24 @@
     <button type="submit" class="btn btn-default">Re-run query</button>
   </form>
   <div class="page-header">
+    <h2>Visualized Plan</h2>
+    <button id="renderbutton" class="btn btn-default">generate</button>
+    <svg id="svg-canvas">
+      <g transform="translate(20, 20)"/>
+    </svg>
+  </div>
+  <div class="page-header">
     <h2>Physical Plan</h2>
   </div>
-    <p><pre>${model.profile.plan}</pre></p>
+  <p><pre>${model.profile.plan}</pre></p>
   <div class="page-header">
-    <h2>Profile Summary</h2>
+  <h2>Profile Summary</h2>
   </div>
-    <p>${model.toString()}</p>
+  <p>${model.toString()}</p>
   <div class="page-header">
-    <h2>Complete Profile</h2>
+  <h2>Complete Profile</h2>
   </div>
-    <p><pre>${model.profile.toString()}</pre></p>
+  <p><pre>${model.profile.toString()}</pre></p>
 </#macro>
 
 <@page_html/>
