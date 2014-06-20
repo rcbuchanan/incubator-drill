@@ -72,7 +72,7 @@ public class ProfileWrapper {
     TableBuilder builder = new TableBuilder("Query Timing Profile", "QueryTimingProfile", columns);
 
     
-    long t0 = 0;
+    long t0 = profile.getStart();
     for (MajorFragmentProfile m : majors) {
       ArrayList<MinorFragmentProfile> minors = new ArrayList<MinorFragmentProfile>(m.getMinorFragmentProfileList());
       final String fmt = " (<a href=\"#MinorFragment" + m.getMajorFragmentId() + "_%1$dOperatorProfile\">%1$d</a>)";
@@ -87,9 +87,6 @@ public class ProfileWrapper {
       builder.appendInteger(minors.size(), null);
       
       Collections.sort(minors, Comparators.startTimeCompare);
-      if (t0 == 0) {
-        t0 = minors.get(0).getStartTime();
-      }
       builder.appendMillis(minors.get(0).getStartTime() - t0, String.format(fmt, minors.get(0).getMinorFragmentId()));
       builder.appendMillis(minors.get(li).getStartTime() - t0,String.format(fmt, minors.get(li).getMinorFragmentId()));
 
@@ -116,6 +113,7 @@ public class ProfileWrapper {
 
     Collections.sort(minors, Comparators.minorIdCompare);
     for (MinorFragmentProfile m : minors) {
+      long t0 = profile.getStart();
       ArrayList<OperatorProfile> ops = new ArrayList<OperatorProfile>(m.getOperatorProfileList());
       long biggestIncomingRecords = 0;
       long biggestBatches = 0;
@@ -124,10 +122,12 @@ public class ProfileWrapper {
         biggestIncomingRecords += sp.getRecords();
         biggestBatches += sp.getBatches();
       }
-      
-      builder.appendInteger(m.getMinorFragmentId(), null);
-      builder.appendTime(m.getStartTime(), null);
-      builder.appendTime(m.getEndTime(), null);
+
+      builder.appendCell(
+          majorFragmentProfile.getMajorFragmentId() + "-"
+              + m.getMinorFragmentId(), null);
+      builder.appendMillis(m.getStartTime() - t0, null);
+      builder.appendMillis(m.getEndTime() - t0, null);
       builder.appendMillis(m.getEndTime() - m.getStartTime(), null);
       
       Collections.sort(ops, Comparators.incomingRecordCompare);
@@ -163,38 +163,56 @@ public class ProfileWrapper {
       }
     }
     
+    double totalsetup = 0, totalprocess = 0, totalwait = 0;
     for (Integer opid : opmap.keySet()) {
       ArrayList<Pair<OperatorProfile, Integer>> oplist = opmap.get(opid);
       final String fmt = " (<a href=\"#MinorFragment" + major.getMajorFragmentId() + "_%1$dOperatorProfile\">%1$d</a>)";
       int li = oplist.size() - 1;
-      double totalsetup = 0;
-      double totalprocess = 0;
-      double totalwait = 0;
+      double setup = 0, process = 0, wait = 0;
 
       for (Pair<OperatorProfile, Integer> opint : oplist) {
-        totalsetup += opint.getLeft().getSetupNanos();
-        totalprocess += opint.getLeft().getProcessNanos();
-        totalwait += opint.getLeft().getWaitNanos();
+        setup += opint.getLeft().getSetupNanos();
+        process += opint.getLeft().getProcessNanos();
+        wait += opint.getLeft().getWaitNanos();
       }
+      totalsetup += setup;
+      totalprocess += process;
+      totalwait += wait;
       
       builder.appendInteger(oplist.get(0).getLeft().getOperatorId(), null);
       builder.appendCell(CoreOperatorType.valueOf(oplist.get(0).getLeft().getOperatorType()).toString(), null);
       
       Collections.sort(oplist, Comparators.setupTimeSort);
       builder.appendNanos(oplist.get(0).getLeft().getSetupNanos(), String.format(fmt, oplist.get(0).getRight()));
-      builder.appendNanos((long) (totalsetup / oplist.size()), null);
+      builder.appendNanos((long) (setup / oplist.size()), null);
       builder.appendNanos(oplist.get(li).getLeft().getSetupNanos(), String.format(fmt, oplist.get(li).getRight()));
 
       Collections.sort(opmap.get(opid), Comparators.processTimeSort);
       builder.appendNanos(oplist.get(0).getLeft().getProcessNanos(), String.format(fmt, oplist.get(0).getRight()));
-      builder.appendNanos((long) (totalprocess / oplist.size()), null);
+      builder.appendNanos((long) (process / oplist.size()), null);
       builder.appendNanos(oplist.get(li).getLeft().getProcessNanos(), String.format(fmt, oplist.get(li).getRight()));
       
       Collections.sort(opmap.get(opid), Comparators.waitTimeSort);
       builder.appendNanos(oplist.get(0).getLeft().getWaitNanos(), String.format(fmt, oplist.get(0).getRight()));
-      builder.appendNanos((long) (totalwait / oplist.size()), null);
+      builder.appendNanos((long) (wait / oplist.size()), null);
       builder.appendNanos(oplist.get(li).getLeft().getWaitNanos(), String.format(fmt, oplist.get(li).getRight()));
     }
+    
+    builder.appendCell("", null);
+    builder.appendCell("Fragment Average", null);
+    
+    builder.appendCell("", null);
+    builder.appendNanos((long) (totalsetup / major.getMinorFragmentProfileCount()), null);
+    builder.appendCell("", null);
+    
+    builder.appendCell("", null);
+    builder.appendNanos((long) (totalprocess / major.getMinorFragmentProfileCount()), null);
+    builder.appendCell("", null);
+    
+    builder.appendCell("", null);
+    builder.appendNanos((long) (totalwait  / major.getMinorFragmentProfileCount()), null);
+    builder.appendCell("", null);
+    
     return builder.toString();
   }
   
