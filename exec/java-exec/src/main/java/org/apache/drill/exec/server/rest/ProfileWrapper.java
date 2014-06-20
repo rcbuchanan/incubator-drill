@@ -66,6 +66,9 @@ public class ProfileWrapper {
         builder.append(minorFragmentOperatorProfile(m.getMajorFragmentId(), mi));
       }
     }
+    for (MajorFragmentProfile m : majors) {
+      builder.append(majorFragmentMetricsProfile(m));
+    }
     return builder.toString();
   }
 
@@ -196,6 +199,54 @@ public class ProfileWrapper {
       builder.appendNanos(oplist.get(0).getLeft().getWaitNanos(), String.format(fmt, oplist.get(0).getRight()));
       builder.appendNanos((long) (totalwait / oplist.size()), null);
       builder.appendNanos(oplist.get(li).getLeft().getWaitNanos(), String.format(fmt, oplist.get(li).getRight()));
+    }
+    return builder.toString();
+  }
+  
+  public String majorFragmentMetricsProfile(MajorFragmentProfile major) {
+    TreeMap<Integer, ArrayList<Pair<OperatorProfile, Integer>>> opmap =
+        new TreeMap<Integer, ArrayList<Pair<OperatorProfile, Integer>>>();
+
+    
+    
+    final String [] columns = {"id", "operator", "metric", "value"};
+    TableBuilder builder = new TableBuilder(
+        String.format("Major Fragment #%d Metrics Profile", major.getMajorFragmentId()),
+        String.format("MajorFragment%dMetricsProfile", major.getMajorFragmentId()),
+        columns);
+    
+    
+    for (MinorFragmentProfile m : major.getMinorFragmentProfileList()) {
+      int mid = m.getMinorFragmentId();
+      
+      for (OperatorProfile op : m.getOperatorProfileList()) {
+        int opid = op.getOperatorId();
+        
+        if (!opmap.containsKey(opid)) {
+          opmap.put(opid, new ArrayList<Pair<OperatorProfile, Integer>>());
+        }
+        opmap.get(opid).add(new ImmutablePair<OperatorProfile, Integer>(op, mid));
+      }
+    }
+    
+    for (Integer opid : opmap.keySet()) {
+      ArrayList<Pair<OperatorProfile, Integer>> oplist = opmap.get(opid);
+      
+      
+      for (Pair<OperatorProfile, Integer> opint : oplist) {
+        for (MetricValue metric : opint.getLeft().getMetricList()) {
+          builder.appendCell(String.format("%d-%d-%d",
+              major.getMajorFragmentId(),
+              opint.getRight(),
+              opint.getLeft().getOperatorId()), null);
+          builder.appendCell(CoreOperatorType.valueOf(oplist.get(0).getLeft().getOperatorType()).toString(), null);
+          builder.appendCell(MetricRegistry.lookupMetric(opint.getLeft().getOperatorType(), metric.getMetricId()), null);
+          builder.appendInteger(metric.getLongValue(), null);
+        }
+      }
+      
+      Collections.sort(oplist, Comparators.setupTimeSort);
+      
     }
     return builder.toString();
   }
