@@ -52,7 +52,8 @@ public class SenderStats extends OperatorStats {
         .setOperatorType(operatorType) //
         .setOperatorId(operatorId) //
         .setSetupNanos(setupNanos) //
-        .setProcessNanos(processingNanos);
+        .setProcessNanos(processingNanos)
+        .setWaitNanos(waitNanos);
 
     addAllMetrics(b);
 
