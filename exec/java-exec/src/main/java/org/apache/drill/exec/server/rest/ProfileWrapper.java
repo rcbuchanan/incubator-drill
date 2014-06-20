@@ -73,7 +73,7 @@ public class ProfileWrapper {
   }
 
   public String queryTimingProfile(ArrayList<MajorFragmentProfile> majors) {
-    final String[] columns = {"id", "minors", "first start", "last start", "first end", "last end", "tmin", "tavg", "tmax"};
+    final String[] columns = {"major id", "# minor fragments", "first start", "last start", "first end", "last end", "tmin", "tavg", "tmax"};
     TableBuilder builder = new TableBuilder("Query Timing Profile", "QueryTimingProfile", columns);
 
     
@@ -234,7 +234,10 @@ public class ProfileWrapper {
         columns);
     
     
-    for (MinorFragmentProfile m : major.getMinorFragmentProfileList()) {
+    ArrayList<MinorFragmentProfile> minors = new ArrayList<MinorFragmentProfile>(
+        major.getMinorFragmentProfileList());
+    Collections.sort(minors, Comparators.minorIdCompare);
+    for (MinorFragmentProfile m : minors) {
       int mid = m.getMinorFragmentId();
       
       for (OperatorProfile op : m.getOperatorProfileList()) {
