@@ -19,12 +19,15 @@ package org.apache.drill.exec.server.rest;
 
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
-import org.apache.drill.exec.proto.UserBitShared.CoreOperatorType;
+import org.apache.drill.exec.ops.MetricDef;
+import org.apache.drill.exec.ops.MetricRegistry;
 import org.apache.drill.exec.proto.UserBitShared.MajorFragmentProfile;
+import org.apache.drill.exec.proto.UserBitShared.MetricValue;
 import org.apache.drill.exec.proto.UserBitShared.MinorFragmentProfile;
 import org.apache.drill.exec.proto.UserBitShared.OperatorProfile;
 import org.apache.drill.exec.proto.UserBitShared.QueryProfile;
 import org.apache.drill.exec.proto.UserBitShared.StreamProfile;
+import org.apache.drill.exec.proto.beans.CoreOperatorType;
 
 import java.text.DateFormat;
 import java.text.NumberFormat;
@@ -32,6 +35,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.TreeMap;
 
@@ -214,6 +218,13 @@ public class ProfileWrapper {
       builder.appendNanos(op.getSetupNanos(), null);
       builder.appendNanos(op.getProcessNanos(), null);
       builder.appendNanos(op.getWaitNanos(), null);
+      
+      String s = "";
+      for (MetricValue mv : op.getMetricList()) {
+        s += MetricRegistry.lookupMetric(op.getOperatorType(), mv.getMetricId());
+        s += " = " + Long.toString(mv.getLongValue()) + ", ";
+      }
+      builder.appendCell(s, null);
     }
     
     return builder.toString();

@@ -19,6 +19,7 @@ package org.apache.drill.exec.physical.impl.mergereceiver;
  */
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
@@ -44,6 +45,7 @@ import org.apache.drill.exec.ops.FragmentContext;
 import org.apache.drill.exec.ops.MetricDef;
 import org.apache.drill.exec.physical.config.MergingReceiverPOP;
 import org.apache.drill.exec.proto.UserBitShared;
+import org.apache.drill.exec.proto.beans.CoreOperatorType;
 import org.apache.drill.exec.record.AbstractRecordBatch;
 import org.apache.drill.exec.record.BatchSchema;
 import org.apache.drill.exec.record.ExpandableHyperContainer;
@@ -104,6 +106,13 @@ public class MergingRecordBatch extends AbstractRecordBatch<MergingReceiverPOP> 
     @Override
     public int metricId() {
       return ordinal();
+    }
+    
+    @Override
+    public List<CoreOperatorType> supported() {
+      final CoreOperatorType[] types = {
+      };
+      return Arrays.asList(types);
     }
   }
 

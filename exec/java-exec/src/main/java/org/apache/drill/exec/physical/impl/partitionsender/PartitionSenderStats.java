@@ -17,7 +17,11 @@
  */
 package org.apache.drill.exec.physical.impl.partitionsender;
 
+import java.util.Arrays;
+import java.util.List;
+
 import org.apache.drill.exec.ops.MetricDef;
+import org.apache.drill.exec.proto.beans.CoreOperatorType;
 
 public enum PartitionSenderStats implements MetricDef {
 
@@ -30,6 +34,17 @@ public enum PartitionSenderStats implements MetricDef {
   @Override
   public int metricId() {
     return ordinal();
+  }
+
+  @Override
+  public List<CoreOperatorType> supported() {
+    final CoreOperatorType[] types = {
+        CoreOperatorType.BROADCAST_SENDER,
+        CoreOperatorType.SCREEN,
+        CoreOperatorType.HASH_PARTITION_SENDER,
+        CoreOperatorType.SINGLE_SENDER
+    };
+    return Arrays.asList(types);
   }
 
 }
