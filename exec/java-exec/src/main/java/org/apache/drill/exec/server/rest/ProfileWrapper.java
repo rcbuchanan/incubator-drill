@@ -120,7 +120,7 @@ public class ProfileWrapper {
       long biggestIncomingRecords = 0;
       long biggestBatches = 0;
       
-      for (StreamProfile sp : ops.get(0).getInputProfileList()) {
+      for (StreamProfile sp : ops.get(ops.size() - 1).getInputProfileList()) {
         biggestIncomingRecords += sp.getRecords();
         biggestBatches += sp.getBatches();
       }
@@ -222,37 +222,37 @@ public class ProfileWrapper {
   private static class Comparators {
     final static Comparator<MajorFragmentProfile> majorIdCompare = new Comparator<MajorFragmentProfile>() {
       public int compare(MajorFragmentProfile o1, MajorFragmentProfile o2) {
-        return o1.getMajorFragmentId() < o2.getMajorFragmentId() ? -1 : 1;
+        return Long.compare(o1.getMajorFragmentId(), o2.getMajorFragmentId());
       }
     };
     
     final static Comparator<MinorFragmentProfile> minorIdCompare = new Comparator<MinorFragmentProfile>() {
       public int compare(MinorFragmentProfile o1, MinorFragmentProfile o2) {
-        return o1.getMinorFragmentId() < o2.getMinorFragmentId() ? -1 : 1;
+        return Long.compare(o1.getMinorFragmentId(), o2.getMinorFragmentId());
       }
     };
     
     final static Comparator<MinorFragmentProfile> startTimeCompare = new Comparator<MinorFragmentProfile>() {
       public int compare(MinorFragmentProfile o1, MinorFragmentProfile o2) {
-        return o1.getStartTime() < o2.getStartTime() ? -1 : 1;
+        return Long.compare(o1.getStartTime(), o2.getStartTime());
       }
     };
 
     final static Comparator<MinorFragmentProfile> endTimeCompare = new Comparator<MinorFragmentProfile>() {
       public int compare(MinorFragmentProfile o1, MinorFragmentProfile o2) {
-        return o1.getEndTime() < o2.getEndTime() ? -1 : 1;
+        return Long.compare(o1.getEndTime(), o2.getEndTime());
       }
     };
 
     final static Comparator<MinorFragmentProfile> runTimeCompare = new Comparator<MinorFragmentProfile>() {
       public int compare(MinorFragmentProfile o1, MinorFragmentProfile o2) {
-        return o1.getEndTime() - o1.getStartTime() < o2.getEndTime() - o2.getStartTime() ? -1 : 1;
+        return Long.compare(o1.getEndTime() - o1.getStartTime(), o2.getEndTime() - o2.getStartTime());
       }
     };
     
     final static Comparator<OperatorProfile> operatorIdCompare = new Comparator<OperatorProfile>() {
       public int compare(OperatorProfile o1, OperatorProfile o2) {
-        return o1.getOperatorId() < o2.getOperatorId() ? -1 : 1;
+        return Long.compare(o1.getOperatorId(), o2.getOperatorId());
       }
     };
     
@@ -266,25 +266,25 @@ public class ProfileWrapper {
       }
       
       public int compare(OperatorProfile o1, OperatorProfile o2) {
-        return incomingRecordCount(o1) > incomingRecordCount(o2) ? -1 : 1;
+        return Long.compare(incomingRecordCount(o1), incomingRecordCount(o2));
       }
     };
     
     final static Comparator<Pair<OperatorProfile, Integer>> setupTimeSort = new Comparator<Pair<OperatorProfile, Integer>>() {
       public int compare(Pair<OperatorProfile, Integer> o1, Pair<OperatorProfile, Integer> o2) {
-        return o1.getLeft().getSetupNanos() < o2.getLeft().getSetupNanos() ? -1 : 1;
+        return Long.compare(o1.getLeft().getSetupNanos(), o2.getLeft().getSetupNanos());
       }
     };
     
     final static Comparator<Pair<OperatorProfile, Integer>> processTimeSort = new Comparator<Pair<OperatorProfile, Integer>>() {
       public int compare(Pair<OperatorProfile, Integer> o1, Pair<OperatorProfile, Integer> o2) {
-        return o1.getLeft().getProcessNanos() < o2.getLeft().getProcessNanos() ? -1 : 1;
+        return Long.compare(o1.getLeft().getProcessNanos(), o2.getLeft().getProcessNanos());
       }
     };
     
     final static Comparator<Pair<OperatorProfile, Integer>> waitTimeSort = new Comparator<Pair<OperatorProfile, Integer>>() {
       public int compare(Pair<OperatorProfile, Integer> o1, Pair<OperatorProfile, Integer> o2) {
-        return o1.getLeft().getWaitNanos() < o2.getLeft().getWaitNanos() ? -1 : 1;
+        return Long.compare(o1.getLeft().getWaitNanos(), o2.getLeft().getWaitNanos());
       }
     };
   }
