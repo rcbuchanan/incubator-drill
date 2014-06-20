@@ -50,6 +50,17 @@ public class ProfileResources {
 
 
   @GET
+  @Path("/json/{queryid}")
+  @Produces(MediaType.APPLICATION_JSON)
+  public String getJsonQuery(@PathParam("queryid") String queryId) throws IOException {
+    PStore<QueryProfile> profiles = work.getContext().getPersistentStoreProvider().getPStore(QueryStatus.QUERY_PROFILE);
+    QueryProfile profile = profiles.get(queryId);
+    if(profile == null) profile = QueryProfile.getDefaultInstance();
+
+    return new String(QueryStatus.QUERY_PROFILE.getSerializer().serialize(profile));
+  }
+  
+  @GET
   @Path("/{queryid}")
   @Produces(MediaType.TEXT_HTML)
   public Viewable getQuery(@PathParam("queryid") String queryId) throws IOException {
