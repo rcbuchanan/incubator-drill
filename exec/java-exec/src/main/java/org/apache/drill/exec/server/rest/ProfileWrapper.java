@@ -32,8 +32,10 @@ import java.text.DateFormat;
 import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.Locale;
 import java.util.TreeMap;
 
@@ -73,64 +75,83 @@ public class ProfileWrapper {
   }
 
   public String queryTimingProfile(ArrayList<MajorFragmentProfile> majors) {
-    final String[] columns = {"major id", "# minor fragments", "first start", "last start", "first end", "last end", "tmin", "tavg", "tmax"};
+    final String[] columns = {"major id", "fragments reporting", "first start", "last start", "first end", "last end", "tmin", "tavg", "tmax"};
     TableBuilder builder = new TableBuilder("Query Timing Profile", "QueryTimingProfile", columns);
 
     
     long t0 = profile.getStart();
     for (MajorFragmentProfile m : majors) {
-      ArrayList<MinorFragmentProfile> minors = new ArrayList<MinorFragmentProfile>(m.getMinorFragmentProfileList());
       final String fmt = " (<a href=\"#MinorFragment" + m.getMajorFragmentId() + "_%1$dOperatorProfile\">%1$d</a>)";
-      int li = minors.size() - 1;
-      double total = 0;
       
-      for (MinorFragmentProfile p : minors) {
-        total += p.getEndTime() - p.getStartTime();
-      }
-      
+      ArrayList<MinorFragmentProfile> complete = new Filters.FilterMissingTimes().filterToArrayList(
+          m.getMinorFragmentProfileList());
+  
       builder.appendInteger(m.getMajorFragmentId(), null);
-      builder.appendInteger(minors.size(), null);
+      builder.appendCell(complete.size() + " / " + m.getMinorFragmentProfileCount(), null);
       
-      Collections.sort(minors, Comparators.startTimeCompare);
-      builder.appendMillis(minors.get(0).getStartTime() - t0, String.format(fmt, minors.get(0).getMinorFragmentId()));
-      builder.appendMillis(minors.get(li).getStartTime() - t0,String.format(fmt, minors.get(li).getMinorFragmentId()));
-
-      Collections.sort(minors, Comparators.endTimeCompare);
-      builder.appendMillis(minors.get(0).getEndTime() - t0,String.format(fmt, minors.get(0).getMinorFragmentId()));
-      builder.appendMillis(minors.get(li).getEndTime() - t0, String.format(fmt, minors.get(li).getMinorFragmentId()));
-      
-      Collections.sort(minors, Comparators.runTimeCompare);
-      builder.appendMillis(minors.get(0).getEndTime() - minors.get(0).getStartTime(), String.format(fmt, minors.get(0).getMinorFragmentId()));
-      builder.appendMillis((long) (total / minors.size()), null);
-      builder.appendMillis(minors.get(li).getEndTime() - minors.get(li).getStartTime(), String.format(fmt, minors.get(li).getMinorFragmentId()));
+      if (complete.size() < 1) {
+        builder.appendRepeated("", null, 7);
+      } else {
+        int li = complete.size() - 1;
+        
+        Collections.sort(complete, Comparators.startTimeCompare);
+        builder.appendMillis(complete.get(0).getStartTime() - t0, String.format(fmt, complete.get(0).getMinorFragmentId()));
+        builder.appendMillis(complete.get(li).getStartTime() - t0, String.format(fmt, complete.get(li).getMinorFragmentId()));
+  
+        Collections.sort(complete, Comparators.endTimeCompare);
+        builder.appendMillis(complete.get(0).getEndTime() - t0, String.format(fmt, complete.get(0).getMinorFragmentId()));
+        builder.appendMillis(complete.get(li).getEndTime() - t0, String.format(fmt, complete.get(li).getMinorFragmentId()));
+        
+        long total = 0;
+        for (MinorFragmentProfile p : complete) {
+          total += p.getEndTime() - p.getStartTime();
+        }
+        Collections.sort(complete, Comparators.runTimeCompare);
+        builder.appendMillis(complete.get(0).getEndTime() - complete.get(0).getStartTime(),
+            String.format(fmt, complete.get(0).getMinorFragmentId()));
+        builder.appendMillis((long) (total / complete.size()), null);
+        builder.appendMillis(complete.get(li).getEndTime() - complete.get(li).getStartTime(),
+            String.format(fmt, complete.get(li).getMinorFragmentId()));
+      }
     }
     return builder.toString();
   }
 
-  public String majorFragmentTimingProfile(MajorFragmentProfile majorFragmentProfile) {
-    ArrayList<MinorFragmentProfile> minors = new ArrayList<MinorFragmentProfile>(majorFragmentProfile.getMinorFragmentProfileList());
-    
+  public String majorFragmentTimingProfile(MajorFragmentProfile majorFragmentProfile) {    
     final String[] columns = {"id", "start", "end", "total time", "max records", "max batches"};
     TableBuilder builder = new TableBuilder(
         "Major Fragment #" + majorFragmentProfile.getMajorFragmentId() + " Timing Profile",
         "MajorFragment" + majorFragmentProfile.getMajorFragmentId() + "TimingProfile",
         columns);
 
-    Collections.sort(minors, Comparators.minorIdCompare);
-    for (MinorFragmentProfile m : minors) {
-      long t0 = profile.getStart();
+    ArrayList<MinorFragmentProfile> complete = new Filters.FilterMissingTimes().filterToArrayList(
+        majorFragmentProfile.getMinorFragmentProfileList());
+    ArrayList<MinorFragmentProfile> incomplete = new Filters.InvFilter<MinorFragmentProfile>(
+        new Filters.FilterMissingTimes()).filterToArrayList(
+            majorFragmentProfile.getMinorFragmentProfileList());
+    
+    Collections.sort(complete, Comparators.minorIdCompare);
+    for (MinorFragmentProfile m : complete) {
       ArrayList<OperatorProfile> ops = new ArrayList<OperatorProfile>(m.getOperatorProfileList());
+
+      long t0 = profile.getStart();
       long biggestIncomingRecords = 0;
       long biggestBatches = 0;
+      
+      builder.appendCell(
+          majorFragmentProfile.getMajorFragmentId() + "-"
+              + m.getMinorFragmentId(), null);
+      
+      if (ops.size() < 1) {
+        builder.appendRepeated(m.getState().toString(), null, 5);
+        continue;
+      }
       
       for (StreamProfile sp : ops.get(ops.size() - 1).getInputProfileList()) {
         biggestIncomingRecords += sp.getRecords();
         biggestBatches += sp.getBatches();
       }
 
-      builder.appendCell(
-          majorFragmentProfile.getMajorFragmentId() + "-"
-              + m.getMinorFragmentId(), null);
       builder.appendMillis(m.getStartTime() - t0, null);
       builder.appendMillis(m.getEndTime() - t0, null);
       builder.appendMillis(m.getEndTime() - m.getStartTime(), null);
@@ -138,6 +159,12 @@ public class ProfileWrapper {
       Collections.sort(ops, Comparators.incomingRecordCompare);
       builder.appendInteger(biggestIncomingRecords, null);
       builder.appendInteger(biggestBatches, null);
+    }
+    for (MinorFragmentProfile m : incomplete) {
+      builder.appendCell(
+          majorFragmentProfile.getMajorFragmentId() + "-"
+              + m.getMinorFragmentId(), null);
+      builder.appendRepeated(m.getState().toString(), null, 5);
     }
     return builder.toString();
   }
@@ -275,12 +302,15 @@ public class ProfileWrapper {
   public String minorFragmentOperatorProfile(int majorId, MinorFragmentProfile minorFragmentProfile) {
     ArrayList<OperatorProfile> oplist = new ArrayList<OperatorProfile>(minorFragmentProfile.getOperatorProfileList());
     
-    final String[] columns = {"id", "type", "setup", "process", "wait", "metrics"};
+    final String[] columns = {"id", "type", "setup", "process", "wait"};
     TableBuilder builder = new TableBuilder(
         String.format("Minor Fragment #%d-%d Operator Profile", majorId, minorFragmentProfile.getMinorFragmentId()),
         String.format("MinorFragment%d_%dOperatorProfile", majorId, minorFragmentProfile.getMinorFragmentId()),
         columns);
 
+    if (oplist.size() < 1) {
+      return "";
+    }
     Collections.sort(oplist, Comparators.operatorIdCompare);
     for (OperatorProfile op : oplist) {
       builder.appendInteger(op.getOperatorId(), null);
@@ -289,12 +319,6 @@ public class ProfileWrapper {
       builder.appendNanos(op.getProcessNanos(), null);
       builder.appendNanos(op.getWaitNanos(), null);
       
-      String s = "";
-      for (MetricValue mv : op.getMetricList()) {
-        s += MetricRegistry.lookupMetric(op.getOperatorType(), mv.getMetricId());
-        s += " = " + Long.toString(mv.getLongValue()) + ", ";
-      }
-      builder.appendCell(s, null);
     }
     
     return builder.toString();
@@ -369,6 +393,59 @@ public class ProfileWrapper {
       }
     };
   }
+    
+  static class Filters {
+    abstract static class Filter<T> {
+      abstract boolean filter(T value);
+      
+      void filterArrayList(ArrayList<T> list) {
+        Iterator<T> it = list.iterator();
+        
+        while (it.hasNext()) {
+          if (filter(it.next())) {
+            it.remove();
+          }
+        }
+      }
+      
+      ArrayList<T> filterToArrayList(Collection<T> list) {
+        ArrayList<T> rv = new ArrayList<T>(list);
+        Iterator<T> it = rv.iterator();
+        
+        while (it.hasNext()) {
+          if (filter(it.next())) {
+            it.remove();
+          }
+        }
+        
+        return rv;
+      }
+    }
+    
+    static class InvFilter<T> extends Filter<T> {
+      Filter<T> orig;
+      
+      InvFilter(Filter<T> orig) {
+        this.orig = orig;
+      }
+      
+      boolean filter(T value) {
+        return !orig.filter(value);
+      }
+    }
+    
+    static class FilterMissingTimes extends Filter<MinorFragmentProfile> {
+      boolean filter(MinorFragmentProfile value) {
+        return !value.hasStartTime() || !value.hasEndTime();
+      }
+    }
+    
+    static class FilterMissingOperators extends Filter<MinorFragmentProfile> {
+      boolean filter(MinorFragmentProfile value) {
+        return value.getOperatorProfileCount() == 0;
+      }
+    }
+  }
   
   class TableBuilder {
     NumberFormat format = NumberFormat.getInstance(Locale.US);
@@ -401,6 +478,12 @@ public class ProfileWrapper {
       if (++w >= width) {
         sb.append("</tr>\n");
         w = 0;
+      }
+    }
+    
+    public void appendRepeated(String s, String link, int n) {
+      for (int i = 0; i < n; i++) {
+        appendCell(s, link);
       }
     }
     
