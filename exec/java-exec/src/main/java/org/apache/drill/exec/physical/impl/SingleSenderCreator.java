@@ -24,11 +24,13 @@ import java.util.List;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.exec.memory.OutOfMemoryException;
 import org.apache.drill.exec.ops.FragmentContext;
+import org.apache.drill.exec.ops.MetricDef;
 import org.apache.drill.exec.ops.OperatorContext;
-import org.apache.drill.exec.ops.SenderStats;
+import org.apache.drill.exec.ops.OperatorStats;
 import org.apache.drill.exec.physical.config.SingleSender;
 import org.apache.drill.exec.proto.ExecProtos.FragmentHandle;
 import org.apache.drill.exec.proto.GeneralRPCProtos.Ack;
+import org.apache.drill.exec.proto.beans.CoreOperatorType;
 import org.apache.drill.exec.record.FragmentWritableBatch;
 import org.apache.drill.exec.record.RecordBatch;
 import org.apache.drill.exec.record.RecordBatch.IterOutcome;
@@ -38,6 +40,19 @@ import org.apache.drill.exec.rpc.data.DataTunnel;
 
 public class SingleSenderCreator implements RootCreator<SingleSender>{
 
+  public enum Metric implements MetricDef {
+    BATCHES_SENT,
+    RECORDS_SENT,
+    MIN_BYTES,
+    MAX_BYTES,
+    N_SENDERS;
+
+    @Override
+    public int metricId() {
+      return ordinal();
+    }
+  }
+  
   @Override
   public RootExec getRoot(FragmentContext context, SingleSender config, List<RecordBatch> children)
       throws ExecutionSetupException {
@@ -56,7 +71,8 @@ public class SingleSenderCreator implements RootCreator<SingleSender>{
     private FragmentContext context;
     private volatile boolean ok = true;
     private final SendingAccountor sendCount = new SendingAccountor();
-
+    private final OperatorStats.OutgoingBatchMetricHelper outgoingBatchMetricHelper;
+    
     public SingleSenderRootExec(FragmentContext context, RecordBatch batch, SingleSender config) throws OutOfMemoryException {
       super(context, config);
       this.incoming = batch;
@@ -66,6 +82,9 @@ public class SingleSenderCreator implements RootCreator<SingleSender>{
       FragmentHandle opposite = handle.toBuilder().setMajorFragmentId(config.getOppositeMajorFragmentId()).setMinorFragmentId(0).build();
       this.tunnel = context.getDataTunnel(config.getDestination(), opposite);
       this.context = context;
+      
+      outgoingBatchMetricHelper = new OperatorStats.OutgoingBatchMetricHelper(Metric.MIN_BYTES, Metric.MAX_BYTES);
+      stats.registerMetricHelper(outgoingBatchMetricHelper);
     }
     
     @Override
@@ -95,6 +114,7 @@ public class SingleSenderCreator implements RootCreator<SingleSender>{
       case OK:
         FragmentWritableBatch batch = new FragmentWritableBatch(false, handle.getQueryId(), handle.getMajorFragmentId(),
                 handle.getMinorFragmentId(), recMajor, 0, incoming.getWritableBatch());
+        outgoingBatchMetricHelper.update(batch.getByteCount());
         sendCount.increment();
         stats.startWait();
         try {

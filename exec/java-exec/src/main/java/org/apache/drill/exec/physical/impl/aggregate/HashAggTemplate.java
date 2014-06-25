@@ -36,14 +36,15 @@ import org.apache.drill.exec.expr.TypeHelper;
 import org.apache.drill.exec.expr.holders.IntHolder;
 import org.apache.drill.exec.memory.BufferAllocator;
 import org.apache.drill.exec.ops.FragmentContext;
+import org.apache.drill.exec.ops.MetricDef;
 import org.apache.drill.exec.ops.OperatorStats;
 import org.apache.drill.exec.physical.config.HashAggregate;
 import org.apache.drill.exec.physical.impl.common.ChainedHashTable;
 import org.apache.drill.exec.physical.impl.common.HashTable;
 import org.apache.drill.exec.physical.impl.common.HashTableConfig;
-import org.apache.drill.exec.physical.impl.common.HashTableMetrics;
 import org.apache.drill.exec.physical.impl.common.HashTableStats;
 import org.apache.drill.exec.physical.impl.common.HashTableTemplate.BatchHolder;
+import org.apache.drill.exec.proto.beans.CoreOperatorType;
 import org.apache.drill.exec.record.BatchSchema;
 import org.apache.drill.exec.record.MaterializedField;
 import org.apache.drill.exec.record.RecordBatch;
@@ -98,7 +99,23 @@ public abstract class HashAggTemplate implements HashAggregator {
   private boolean  buildComplete = false;
 
   private OperatorStats stats = null;
-  private HashTableStats htStats = new HashTableStats();
+  private OperatorStats.HashTableMetricHelper hashTableMetricHelper = null;
+  
+  public enum Metric implements MetricDef {
+
+    NUM_BUCKETS,
+    NUM_ENTRIES,
+    NUM_RESIZING,
+    RESIZE_TIME;
+    
+    // duplicate for hash ag
+
+    @Override
+    public int metricId() {
+      return ordinal();
+    }
+  }
+
 
   public class BatchHolder {
 
@@ -198,6 +215,10 @@ public abstract class HashAggTemplate implements HashAggregator {
     this.outgoing = outgoing;
 
     this.hashAggrConfig = hashAggrConfig;
+    
+    hashTableMetricHelper = new OperatorStats.HashTableMetricHelper(Metric.NUM_BUCKETS, Metric.NUM_ENTRIES, Metric.NUM_RESIZING, Metric.RESIZE_TIME);
+    stats.registerMetricHelper(hashTableMetricHelper);
+    
 
     // currently, hash aggregation is only applicable if there are group-by expressions.
     // For non-grouped (a.k.a Plain) aggregations that don't involve DISTINCT, there is no
@@ -287,7 +308,7 @@ public abstract class HashAggTemplate implements HashAggregator {
 
               buildComplete = true;
 
-              updateStats(htable);
+              hashTableMetricHelper.update(htable);
 
               // output the first batch; remaining batches will be output
               // in response to each next() call by a downstream operator
@@ -546,13 +567,6 @@ public abstract class HashAggTemplate implements HashAggregator {
     }
 
     return false;
-  }
-
-  private void updateStats(HashTable htable) {
-    htable.getStats(htStats);
-    this.stats.addLongStat(HashTableMetrics.HTABLE_NUM_BUCKETS, htStats.numBuckets);
-    this.stats.addLongStat(HashTableMetrics.HTABLE_NUM_ENTRIES, htStats.numEntries);
-    this.stats.addLongStat(HashTableMetrics.HTABLE_NUM_RESIZING, htStats.numResizing);
   }
 
   // Code-generated methods (implemented in HashAggBatch)

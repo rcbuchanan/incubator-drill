@@ -23,8 +23,9 @@ import java.util.List;
 
 import org.apache.drill.exec.memory.OutOfMemoryException;
 import org.apache.drill.exec.ops.FragmentContext;
+import org.apache.drill.exec.ops.MetricDef;
 import org.apache.drill.exec.ops.OperatorContext;
-import org.apache.drill.exec.ops.SenderStats;
+import org.apache.drill.exec.ops.OperatorStats;
 import org.apache.drill.exec.physical.config.BroadcastSender;
 import org.apache.drill.exec.physical.impl.BaseRootExec;
 import org.apache.drill.exec.physical.impl.RootExec;
@@ -34,6 +35,7 @@ import org.apache.drill.exec.proto.ExecProtos;
 import org.apache.drill.exec.proto.ExecProtos.FragmentHandle;
 import org.apache.drill.exec.proto.GeneralRPCProtos.Ack;
 import org.apache.drill.exec.proto.GeneralRPCProtos;
+import org.apache.drill.exec.proto.beans.CoreOperatorType;
 import org.apache.drill.exec.record.FragmentWritableBatch;
 import org.apache.drill.exec.record.RecordBatch;
 import org.apache.drill.exec.record.WritableBatch;
@@ -55,7 +57,21 @@ public class BroadcastSenderRootExec extends BaseRootExec {
   private final ExecProtos.FragmentHandle handle;
   private volatile boolean ok;
   private final RecordBatch incoming;
+  private final OperatorStats.OutgoingBatchMetricHelper outgoingBatchMetricHelper;
 
+  public enum Metric implements MetricDef {
+    BATCHES_SENT,
+    RECORDS_SENT,
+    MIN_BYTES,
+    MAX_BYTES,
+    N_SENDERS;
+
+    @Override
+    public int metricId() {
+      return ordinal();
+    }
+  }
+  
   public BroadcastSenderRootExec(FragmentContext context,
                                  RecordBatch incoming,
                                  BroadcastSender config) throws OutOfMemoryException {
@@ -71,6 +87,9 @@ public class BroadcastSenderRootExec extends BaseRootExec {
       FragmentHandle opp = handle.toBuilder().setMajorFragmentId(config.getOppositeMajorFragmentId()).setMinorFragmentId(i).build();
       tunnels[i] = context.getDataTunnel(destinations.get(i), opp);
     }
+    
+    outgoingBatchMetricHelper = new OperatorStats.OutgoingBatchMetricHelper(Metric.MIN_BYTES, Metric.MAX_BYTES);
+    stats.registerMetricHelper(outgoingBatchMetricHelper);
   }
 
   @Override
@@ -106,6 +125,7 @@ public class BroadcastSenderRootExec extends BaseRootExec {
         }
         for (int i = 0; i < tunnels.length; ++i) {
           FragmentWritableBatch batch = new FragmentWritableBatch(false, handle.getQueryId(), handle.getMajorFragmentId(), handle.getMinorFragmentId(), config.getOppositeMajorFragmentId(), i, writableBatch);
+          outgoingBatchMetricHelper.update(batch.getByteCount());
           stats.startWait();
           try {
             tunnels[i].sendRecordBatch(this.statusHandler, batch);

@@ -17,6 +17,8 @@
  */
 package org.apache.drill.exec.ops;
 
+import org.apache.drill.exec.proto.beans.CoreOperatorType;
+
 public interface MetricDef {
   public String name();
   public int metricId();

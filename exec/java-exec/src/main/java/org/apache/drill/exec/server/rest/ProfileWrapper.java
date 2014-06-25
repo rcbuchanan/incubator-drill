@@ -19,12 +19,14 @@ package org.apache.drill.exec.server.rest;
 
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
-import org.apache.drill.exec.proto.UserBitShared.CoreOperatorType;
+import org.apache.drill.exec.ops.MetricRegistry;
 import org.apache.drill.exec.proto.UserBitShared.MajorFragmentProfile;
+import org.apache.drill.exec.proto.UserBitShared.MetricValue;
 import org.apache.drill.exec.proto.UserBitShared.MinorFragmentProfile;
 import org.apache.drill.exec.proto.UserBitShared.OperatorProfile;
 import org.apache.drill.exec.proto.UserBitShared.QueryProfile;
 import org.apache.drill.exec.proto.UserBitShared.StreamProfile;
+import org.apache.drill.exec.proto.beans.CoreOperatorType;
 
 import java.text.DateFormat;
 import java.text.NumberFormat;
@@ -63,6 +65,9 @@ public class ProfileWrapper {
       for (MinorFragmentProfile mi : m.getMinorFragmentProfileList()) {
         builder.append(minorFragmentOperatorProfile(m.getMajorFragmentId(), mi));
       }
+    }
+    for (MajorFragmentProfile m : majors) {
+      builder.append(majorFragmentMetricsProfile(m));
     }
     return builder.toString();
   }
@@ -204,10 +209,61 @@ public class ProfileWrapper {
     return builder.toString();
   }
   
+  public String majorFragmentMetricsProfile(MajorFragmentProfile major) {
+    TreeMap<Integer, ArrayList<Pair<OperatorProfile, Integer>>> opmap =
+        new TreeMap<Integer, ArrayList<Pair<OperatorProfile, Integer>>>();
+
+    
+    
+    final String [] columns = {"id", "operator", "metric", "value"};
+    TableBuilder builder = new TableBuilder(
+        String.format("Major Fragment #%d Metrics Profile", major.getMajorFragmentId()),
+        String.format("MajorFragment%dMetricsProfile", major.getMajorFragmentId()),
+        columns);
+    
+    
+    ArrayList<MinorFragmentProfile> minors = new ArrayList<MinorFragmentProfile>(
+        major.getMinorFragmentProfileList());
+    Collections.sort(minors, Comparators.minorIdCompare);
+    for (MinorFragmentProfile m : minors) {
+      int mid = m.getMinorFragmentId();
+      
+      for (OperatorProfile op : m.getOperatorProfileList()) {
+        int opid = op.getOperatorId();
+        
+        if (!opmap.containsKey(opid)) {
+          opmap.put(opid, new ArrayList<Pair<OperatorProfile, Integer>>());
+        }
+        opmap.get(opid).add(new ImmutablePair<OperatorProfile, Integer>(op, mid));
+      }
+    }
+    
+    for (Integer opid : opmap.keySet()) {
+      ArrayList<Pair<OperatorProfile, Integer>> oplist = opmap.get(opid);
+      
+      
+      for (Pair<OperatorProfile, Integer> opint : oplist) {
+        for (MetricValue metric : opint.getLeft().getMetricList()) {
+          builder.appendCell(String.format("%d-%d-%d",
+              major.getMajorFragmentId(),
+              opint.getRight(),
+              opint.getLeft().getOperatorId()), null);
+          builder.appendCell(CoreOperatorType.valueOf(oplist.get(0).getLeft().getOperatorType()).toString(), null);
+          builder.appendCell(MetricRegistry.getInstance().lookupMetric(opint.getLeft().getOperatorType(), metric.getMetricId()), null);
+          builder.appendInteger(metric.getLongValue(), null);
+        }
+      }
+      
+      Collections.sort(oplist, Comparators.setupTimeSort);
+      
+    }
+    return builder.toString();
+  }
+  
   public String minorFragmentOperatorProfile(int majorId, MinorFragmentProfile minorFragmentProfile) {
     ArrayList<OperatorProfile> oplist = new ArrayList<OperatorProfile>(minorFragmentProfile.getOperatorProfileList());
     
-    final String[] columns = {"id", "type", "setup", "process", "wait"};
+    final String[] columns = {"id", "type", "setup", "process", "wait", "metrics"};
     TableBuilder builder = new TableBuilder(
         String.format("Minor Fragment #%d-%d Operator Profile", majorId, minorFragmentProfile.getMinorFragmentId()),
         String.format("MinorFragment%d_%dOperatorProfile", majorId, minorFragmentProfile.getMinorFragmentId()),
@@ -220,6 +276,13 @@ public class ProfileWrapper {
       builder.appendNanos(op.getSetupNanos(), null);
       builder.appendNanos(op.getProcessNanos(), null);
       builder.appendNanos(op.getWaitNanos(), null);
+      
+      String s = "";
+      for (MetricValue mv : op.getMetricList()) {
+        s += MetricRegistry.getInstance().lookupMetric(op.getOperatorType(), mv.getMetricId());
+        s += " = " + Long.toString(mv.getLongValue()) + ", ";
+      }
+      builder.appendCell(s, null);
     }
     
     return builder.toString();

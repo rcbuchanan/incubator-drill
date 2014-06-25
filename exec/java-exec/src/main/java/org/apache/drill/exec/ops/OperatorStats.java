@@ -17,10 +17,22 @@
  */
 package org.apache.drill.exec.ops;
 
+import io.netty.buffer.ByteBuf;
+
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.drill.exec.memory.BufferAllocator;
+import org.apache.drill.exec.physical.base.PhysicalOperator;
+import org.apache.drill.exec.physical.impl.common.HashTable;
+import org.apache.drill.exec.physical.impl.common.HashTableStats;
+import org.apache.drill.exec.physical.impl.partitionsender.PartitionStatsBatch;
+import org.apache.drill.exec.proto.UserBitShared;
 import org.apache.drill.exec.proto.UserBitShared.MetricValue;
 import org.apache.drill.exec.proto.UserBitShared.OperatorProfile;
 import org.apache.drill.exec.proto.UserBitShared.StreamProfile;
+import org.apache.drill.exec.record.FragmentWritableBatch;
+import org.apache.drill.exec.record.WritableBatch;
 
 import com.carrotsearch.hppc.IntDoubleOpenHashMap;
 import com.carrotsearch.hppc.IntLongOpenHashMap;
@@ -53,7 +65,13 @@ public class OperatorStats {
   private long waitMark;
 
   private long schemas;
+  
+  private ArrayList<MetricHelper> metricHelpers = new ArrayList<MetricHelper>();
 
+  public OperatorStats(PhysicalOperator operator, BufferAllocator allocator) {
+    this(new OpProfileDef(operator.getOperatorId(), operator.getOperatorType(), OperatorContext.getChildCount(operator)), allocator);
+  }
+  
   public OperatorStats(OpProfileDef def, BufferAllocator allocator){
     this(def.getOperatorId(), def.getOperatorType(), def.getIncomingCount(), allocator);
   }
@@ -140,6 +158,9 @@ public class OperatorStats {
   }
 
   public void addAllMetrics(OperatorProfile.Builder builder) {
+    for (MetricHelper mh : metricHelpers) {
+      mh.addHelperMetrics(builder);
+    }
     addStreamProfile(builder);
     addLongMetrics(builder);
     addDoubleMetrics(builder);
@@ -173,6 +194,89 @@ public class OperatorStats {
 
   public void addDoubleStat(MetricDef metric, double value){
     doubleMetrics.putOrAdd(metric.metricId(), value, value);
+  }
+  
+  public void registerMetricHelper(MetricHelper mh) {
+    metricHelpers.add(mh);
+  }
+  
+  public interface MetricHelper {
+    public void addHelperMetrics(OperatorProfile.Builder builder);
+  }
+  
+  public static class OutgoingBatchMetricHelper implements MetricHelper {
+    private final MetricDef minMetric;
+    private final MetricDef maxMetric;
+    
+    private long max = Long.MIN_VALUE;
+    private long min = Long.MAX_VALUE;
+    
+    public void addHelperMetrics(OperatorProfile.Builder builder) {
+      builder.addMetric(UserBitShared.MetricValue.newBuilder().setLongValue(max).setMetricId(maxMetric.metricId()));
+      builder.addMetric(UserBitShared.MetricValue.newBuilder().setLongValue(min).setMetricId(minMetric.metricId()));
+    }
+    
+    public OutgoingBatchMetricHelper(MetricDef minMetric, MetricDef maxMetric) {
+      this.minMetric = minMetric;
+      this.maxMetric = maxMetric;
+    }
+    
+    public void update(List<? extends PartitionStatsBatch> outgoing) {
+      for (PartitionStatsBatch b : outgoing) {
+        max = Math.max(b.getTotalRecords(), max);
+        min = Math.min(b.getTotalRecords(), min);
+      }
+    }
+    
+    public void update(long n) {
+      max = Math.max(n, max);
+      min = Math.min(n, min);
+    }
+  }
+  
+  public static class CounterMetricHelper implements MetricHelper {
+    private final MetricDef counterMetric;
+    private long count = 0;
+    
+    public void addHelperMetrics(OperatorProfile.Builder builder) {
+      builder.addMetric(UserBitShared.MetricValue.newBuilder().setLongValue(count).setMetricId(counterMetric.metricId()));
+    }
+    
+    public CounterMetricHelper(MetricDef counterMetric) {
+      this.counterMetric = counterMetric;
+    }
+    
+    public void increment() {
+      count++;
+    }
+  }
+  
+  public static class HashTableMetricHelper implements MetricHelper {
+    private final HashTableStats htStats = new HashTableStats();
+    private final MetricDef bucketsMetric;
+    private final MetricDef entriesMetric;
+    private final MetricDef resizingMetric;
+    private final MetricDef resizingTimeMetric;
+
+    public void addHelperMetrics(OperatorProfile.Builder builder) {
+      builder.addMetric(UserBitShared.MetricValue.newBuilder().setLongValue(htStats.numBuckets).setMetricId(bucketsMetric.metricId()));
+      builder.addMetric(UserBitShared.MetricValue.newBuilder().setLongValue(htStats.numEntries).setMetricId(entriesMetric.metricId()));
+      builder.addMetric(UserBitShared.MetricValue.newBuilder().setLongValue(htStats.numResizing).setMetricId(resizingMetric.metricId()));
+      builder.addMetric(UserBitShared.MetricValue.newBuilder().setLongValue(htStats.numResizingTime).setMetricId(resizingTimeMetric.metricId()));
+    }
+    
+    public HashTableMetricHelper(MetricDef bucketsMetric, MetricDef entriesMetric, MetricDef resizingMetric, MetricDef resizingTimeMetric) {
+      this.bucketsMetric = bucketsMetric;
+      this.entriesMetric = entriesMetric;
+      this.resizingMetric = resizingMetric;
+      this.resizingTimeMetric = resizingTimeMetric;
+    }
+    
+    public void update(HashTable htable) {
+      if (htable != null) {
+        htable.getStats(htStats);
+      }
+    }
   }
 
 }

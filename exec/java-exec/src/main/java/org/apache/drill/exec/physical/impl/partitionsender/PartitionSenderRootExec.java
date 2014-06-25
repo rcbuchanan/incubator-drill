@@ -18,6 +18,8 @@
 package org.apache.drill.exec.physical.impl.partitionsender;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 
 import org.apache.drill.common.expression.ErrorCollector;
 import org.apache.drill.common.expression.ErrorCollectorImpl;
@@ -29,13 +31,16 @@ import org.apache.drill.exec.expr.CodeGenerator;
 import org.apache.drill.exec.expr.ExpressionTreeMaterializer;
 import org.apache.drill.exec.memory.OutOfMemoryException;
 import org.apache.drill.exec.ops.FragmentContext;
+import org.apache.drill.exec.ops.MetricDef;
 import org.apache.drill.exec.ops.OperatorContext;
-import org.apache.drill.exec.ops.SenderStats;
+import org.apache.drill.exec.ops.OperatorStats;
 import org.apache.drill.exec.physical.config.HashPartitionSender;
 import org.apache.drill.exec.physical.impl.BaseRootExec;
 import org.apache.drill.exec.physical.impl.SendingAccountor;
+import org.apache.drill.exec.physical.impl.partitionsender.PartitionStatsBatch;
 import org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint;
 import org.apache.drill.exec.proto.ExecProtos.FragmentHandle;
+import org.apache.drill.exec.proto.beans.CoreOperatorType;
 import org.apache.drill.exec.record.BatchSchema.SelectionVectorMode;
 import org.apache.drill.exec.record.FragmentWritableBatch;
 import org.apache.drill.exec.record.RecordBatch;
@@ -61,6 +66,20 @@ public class PartitionSenderRootExec extends BaseRootExec {
   private final int outGoingBatchCount;
   private final HashPartitionSender popConfig;
   private final StatusHandler statusHandler;
+  private final OperatorStats.OutgoingBatchMetricHelper outgoingBatchMetricHelper;
+  
+  public enum Metric implements MetricDef {
+    BATCHES_SENT,
+    RECORDS_SENT,
+    MIN_RECORDS,
+    MAX_RECORDS,
+    N_RECEIVERS;
+
+    @Override
+    public int metricId() {
+      return ordinal();
+    }
+  }
 
   public PartitionSenderRootExec(FragmentContext context,
                                  RecordBatch incoming,
@@ -72,6 +91,9 @@ public class PartitionSenderRootExec extends BaseRootExec {
     this.outGoingBatchCount = operator.getDestinations().size();
     this.popConfig = operator;
     this.statusHandler = new StatusHandler(sendCount, context);
+    
+    this.outgoingBatchMetricHelper = new OperatorStats.OutgoingBatchMetricHelper(Metric.MIN_RECORDS, Metric.MAX_RECORDS);
+    stats.registerMetricHelper(outgoingBatchMetricHelper);
   }
 
   @Override
@@ -138,7 +160,7 @@ public class PartitionSenderRootExec extends BaseRootExec {
           context.fail(e);
           return false;
         }
-        stats.updatePartitionStats(partitioner.getOutgoingBatches());
+        outgoingBatchMetricHelper.update(partitioner.getOutgoingBatches());
         for (VectorWrapper<?> v : incoming) {
           v.clear();
         }

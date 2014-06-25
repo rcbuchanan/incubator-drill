@@ -38,14 +38,18 @@ import org.apache.drill.exec.expr.TypeHelper;
 import org.apache.drill.exec.expr.holders.IntHolder;
 import org.apache.drill.exec.memory.OutOfMemoryException;
 import org.apache.drill.exec.ops.FragmentContext;
+import org.apache.drill.exec.ops.MetricDef;
+import org.apache.drill.exec.ops.OperatorStats;
+import org.apache.drill.exec.ops.OperatorStats.HashTableMetricHelper;
 import org.apache.drill.exec.physical.config.HashJoinPOP;
+import org.apache.drill.exec.physical.impl.aggregate.HashAggTemplate.Metric;
 import org.apache.drill.exec.physical.impl.common.ChainedHashTable;
 import org.apache.drill.exec.physical.impl.common.HashTable;
 import org.apache.drill.exec.physical.impl.common.HashTableConfig;
-import org.apache.drill.exec.physical.impl.common.HashTableMetrics;
 import org.apache.drill.exec.physical.impl.common.HashTableStats;
 import org.apache.drill.exec.physical.impl.sort.RecordBatchData;
 import org.apache.drill.exec.physical.impl.svremover.RemovingRecordBatch;
+import org.apache.drill.exec.proto.beans.CoreOperatorType;
 import org.apache.drill.exec.record.AbstractRecordBatch;
 import org.apache.drill.exec.record.BatchSchema;
 import org.apache.drill.exec.record.ExpandableHyperContainer;
@@ -135,13 +139,27 @@ public class HashJoinBatch extends AbstractRecordBatch<HashJoinPOP> {
 
     IterOutcome leftUpstream = IterOutcome.NONE;
 
-    private final HashTableStats htStats = new HashTableStats();
+    private final OperatorStats.HashTableMetricHelper hashTableMetricHelper;
 
+    public enum Metric implements MetricDef {
+
+      NUM_BUCKETS,
+      NUM_ENTRIES,
+      NUM_RESIZING,
+      RESIZE_TIME;
+      
+      // duplicate for hash ag
+
+      @Override
+      public int metricId() {
+        return ordinal();
+      }
+    }
+    
     @Override
     public int getRecordCount() {
         return outputRecords;
     }
-
 
     @Override
     public IterOutcome innerNext() {
@@ -166,7 +184,7 @@ public class HashJoinBatch extends AbstractRecordBatch<HashJoinPOP> {
                 executeBuildPhase();
 
                 // Update the hash table related stats for the operator
-                updateStats(this.hashTable);
+                hashTableMetricHelper.update(this.hashTable);
 
                 // Create the run time generated code needed to probe and project
                 hashJoinProbe = setupHashJoinProbe();
@@ -438,14 +456,9 @@ public class HashJoinBatch extends AbstractRecordBatch<HashJoinPOP> {
         this.right = right;
         this.joinType = popConfig.getJoinType();
         this.conditions = popConfig.getConditions();
-    }
-
-    private void updateStats(HashTable htable) {
-      if(htable == null) return;
-      htable.getStats(htStats);
-      this.stats.addLongStat(HashTableMetrics.HTABLE_NUM_BUCKETS, htStats.numBuckets);
-      this.stats.addLongStat(HashTableMetrics.HTABLE_NUM_ENTRIES, htStats.numEntries);
-      this.stats.addLongStat(HashTableMetrics.HTABLE_NUM_RESIZING, htStats.numResizing);
+        
+        this.hashTableMetricHelper = new OperatorStats.HashTableMetricHelper(Metric.NUM_BUCKETS, Metric.NUM_ENTRIES, Metric.NUM_RESIZING, Metric.RESIZE_TIME);
+        stats.registerMetricHelper(hashTableMetricHelper);
     }
 
     @Override

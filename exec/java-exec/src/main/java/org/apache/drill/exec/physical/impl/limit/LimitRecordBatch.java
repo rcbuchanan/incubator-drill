@@ -22,7 +22,9 @@ import java.util.List;
 import org.apache.drill.exec.exception.SchemaChangeException;
 import org.apache.drill.exec.memory.OutOfMemoryException;
 import org.apache.drill.exec.ops.FragmentContext;
+import org.apache.drill.exec.ops.MetricDef;
 import org.apache.drill.exec.physical.config.Limit;
+import org.apache.drill.exec.proto.beans.CoreOperatorType;
 import org.apache.drill.exec.record.AbstractSingleRecordBatch;
 import org.apache.drill.exec.record.BatchSchema;
 import org.apache.drill.exec.record.RecordBatch;
@@ -41,6 +43,14 @@ public class LimitRecordBatch extends AbstractSingleRecordBatch<Limit> {
   private boolean noEndLimit;
   private boolean skipBatch;
   List<TransferPair> transfers = Lists.newArrayList();
+  
+  public enum Metric implements MetricDef {
+    PLACEHOLDER;
+    @Override
+    public int metricId() {
+      return ordinal();
+    }
+  }
 
   public LimitRecordBatch(Limit popConfig, FragmentContext context, RecordBatch incoming) throws OutOfMemoryException {
     super(popConfig, context, incoming);

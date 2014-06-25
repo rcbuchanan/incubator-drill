@@ -59,6 +59,14 @@ public class WritableBatch {
     return buffers;
   }
 
+  public long getByteCount() {
+    long n = 0;
+    for (ByteBuf buf : buffers) {
+      n += buf.readableBytes();
+    }
+    return n;
+  }
+  
   public void reconstructContainer(VectorContainer container) {
     Preconditions.checkState(!cleared,
         "Attempted to reconstruct a container from a WritableBatch after it had been cleared");
