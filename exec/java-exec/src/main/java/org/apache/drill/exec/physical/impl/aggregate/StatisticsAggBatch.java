@@ -24,7 +24,9 @@ import org.apache.drill.common.expression.ErrorCollector;
 import org.apache.drill.common.expression.ErrorCollectorImpl;
 import org.apache.drill.common.expression.ExpressionPosition;
 import org.apache.drill.common.expression.FunctionCall;
+import org.apache.drill.common.expression.FunctionCallFactory;
 import org.apache.drill.common.expression.LogicalExpression;
+import org.apache.drill.common.expression.ValueExpressions;
 import org.apache.drill.common.logical.data.NamedExpression;
 import org.apache.drill.exec.compile.sig.GeneratorMapping;
 import org.apache.drill.exec.compile.sig.MappingSet;
@@ -67,10 +69,15 @@ public class StatisticsAggBatch extends AbstractRecordBatch<StatisticsAggregate>
   private final RecordBatch incoming;
   private boolean done = false;
   private boolean first = true;
+  
+  private final String funcs[];
+
+  private int schemaId;
 
   public StatisticsAggBatch(StatisticsAggregate popConfig, RecordBatch incoming, FragmentContext context) throws OutOfMemoryException {
     super(popConfig, context);
     this.incoming = incoming;
+    this.funcs = popConfig.getFuncs();
   }
 
   @Override
@@ -171,31 +178,39 @@ public class StatisticsAggBatch extends AbstractRecordBatch<StatisticsAggregate>
     ClassGenerator<StatisticsAggregator> cg = CodeGenerator.getRoot(StatisticsAggTemplate.TEMPLATE_DEFINITION, context.getFunctionRegistry());
     container.clear();
 
-    LogicalExpression[] keyExprs = new LogicalExpression[popConfig.getKeys().length];
-    LogicalExpression[] valueExprs = new LogicalExpression[popConfig.getExprs().length];
-    TypedFieldId[] keyOutputIds = new TypedFieldId[popConfig.getKeys().length];
+    LogicalExpression[] keyExprs = new LogicalExpression[1];
+    LogicalExpression[] valueExprs = new LogicalExpression[incoming.getSchema().getFieldCount() * funcs.length];
+    TypedFieldId[] keyOutputIds = new TypedFieldId[1];
 
     ErrorCollector collector = new ErrorCollectorImpl();
 
-    for(int i =0; i < keyExprs.length; i++){
-      NamedExpression ne = popConfig.getKeys()[i];
-      final LogicalExpression expr = ExpressionTreeMaterializer.materialize(ne.getExpr(), incoming, collector,context.getFunctionRegistry() );
-      if(expr == null) continue;
-      keyExprs[i] = expr;
-      final MaterializedField outputField = MaterializedField.create(ne.getRef(), expr.getMajorType());
+    {
+      final LogicalExpression expr = ExpressionTreeMaterializer.materialize(
+          new ValueExpressions.IntExpression(schemaId++, ExpressionPosition.UNKNOWN),
+          incoming, collector, context.getFunctionRegistry() );
+      keyExprs[0] = expr;
+      final MaterializedField outputField = MaterializedField.create("schemaId", expr.getMajorType());
       ValueVector vector = TypeHelper.getNewVector(outputField, oContext.getAllocator());
-      keyOutputIds[i] = container.add(vector);
+      keyOutputIds[0] = container.add(vector);
     }
 
-    for(int i =0; i < valueExprs.length; i++){
-      NamedExpression ne = popConfig.getExprs()[i];
-      final LogicalExpression expr = ExpressionTreeMaterializer.materialize(ne.getExpr(), incoming, collector, context.getFunctionRegistry());
-      if(expr == null) continue;
-
-      final MaterializedField outputField = MaterializedField.create(ne.getRef(), expr.getMajorType());
-      ValueVector vector = TypeHelper.getNewVector(outputField, oContext.getAllocator());
-      TypedFieldId id = container.add(vector);
-      valueExprs[i] = new ValueVectorWriteExpression(id, expr, true);
+    for (int i = 0; i < funcs.length; i++) {
+      for(int j = 0; j < incoming.getSchema().getFieldCount(); j++){
+        List<LogicalExpression> args = Lists.newArrayList();
+        args.add(incoming.getSchema().getColumn(j).getPath());
+        int fieldno = i * incoming.getSchema().getFieldCount() + j;
+        
+        final LogicalExpression expr = ExpressionTreeMaterializer.materialize(
+            FunctionCallFactory.createExpression(funcs[i], args),
+            incoming, collector, context.getFunctionRegistry());
+        if(expr == null) continue;
+        
+        final MaterializedField outputField = MaterializedField.create(funcs[i] + "no" + j, expr.getMajorType());
+        ValueVector vector = TypeHelper.getNewVector(outputField, oContext.getAllocator());
+        TypedFieldId id = container.add(vector);
+        valueExprs[fieldno] = new ValueVectorWriteExpression(id, expr, true);
+        
+      }
     }
 
     if(collector.hasErrors()) throw new SchemaChangeException("Failure while materializing expression. " + collector.toErrorString());
