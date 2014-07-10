@@ -31,26 +31,19 @@ import com.fasterxml.jackson.annotation.JsonTypeName;
 public class StatisticsAggregate extends AbstractSingle {
 
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StatisticsAggregate.class);
-
-  private final NamedExpression[] keys;
-  private final NamedExpression[] exprs;
+  private final String[] funcs;
 
   private final float cardinality;
 
   @JsonCreator
-  public StatisticsAggregate(@JsonProperty("child") PhysicalOperator child, @JsonProperty("keys") NamedExpression[] keys, @JsonProperty("exprs") NamedExpression[] exprs, @JsonProperty("cardinality") float cardinality) {
+  public StatisticsAggregate(@JsonProperty("child") PhysicalOperator child, @JsonProperty("funcs") String[] funcs, @JsonProperty("cardinality") float cardinality) {
     super(child);
-    this.keys = keys;
-    this.exprs = exprs;
+    this.funcs = funcs;
     this.cardinality = cardinality;
   }
-
-  public NamedExpression[] getKeys() {
-    return keys;
-  }
-
-  public NamedExpression[] getExprs() {
-    return exprs;
+  
+  public String[] getFuncs() {
+    return funcs;
   }
 
   @Override
@@ -60,7 +53,7 @@ public class StatisticsAggregate extends AbstractSingle {
 
   @Override
   protected PhysicalOperator getNewWithChild(PhysicalOperator child) {
-    return new StatisticsAggregate(child, keys, exprs, cardinality);
+    return new StatisticsAggregate(child, funcs, cardinality);
   }
 
   @Override

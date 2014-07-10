@@ -81,9 +81,11 @@ public class StatsAggPrel extends AggPrelBase implements Prel{
   @Override
   public PhysicalOperator getPhysicalOperator(PhysicalPlanCreator creator) throws IOException {
 
+    final String funcs [] = {"sum"};
     Prel child = (Prel) this.getChild();
-    StatisticsAggregate g = new StatisticsAggregate(child.getPhysicalOperator(creator), keys.toArray(new NamedExpression[keys.size()]),
-        aggExprs.toArray(new NamedExpression[aggExprs.size()]), 1.0f);
+    StatisticsAggregate g = new StatisticsAggregate(
+        child.getPhysicalOperator(creator),
+        funcs, 1.0f);
 
     return creator.addMetadata(this, g);
 
