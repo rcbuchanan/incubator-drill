@@ -28,8 +28,8 @@ import org.apache.drill.exec.record.VectorWrapper;
 import org.apache.drill.exec.vector.ValueVector;
 import org.apache.drill.exec.vector.allocator.VectorAllocator;
 
-public abstract class StatisticsAggTemplate implements StreamingAggregator {
-  private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StreamingAggregator.class);
+public abstract class StatisticsAggTemplate implements StatisticsAggregator {
+  private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StatisticsAggregator.class);
   private static final boolean EXTRA_DEBUG = false;
   private static final String TOO_BIG_ERROR = "Couldn't add value to an empty batch.  This likely means that a single value is too long for a varlen field.";
   private IterOutcome lastOutcome = null;
@@ -44,14 +44,14 @@ public abstract class StatisticsAggTemplate implements StreamingAggregator {
   private int outputCount = 0;
   private RecordBatch incoming;
   private BatchSchema schema;
-  private StreamingAggBatch outgoing;
+  private StatisticsAggBatch outgoing;
   private FragmentContext context;
   private InternalBatch remainderBatch;
   private boolean done = false;
 
 
   @Override
-  public void setup(FragmentContext context, RecordBatch incoming, StreamingAggBatch outgoing) throws SchemaChangeException {
+  public void setup(FragmentContext context, RecordBatch incoming, StatisticsAggBatch outgoing) throws SchemaChangeException {
     this.context = context;
     this.incoming = incoming;
     this.schema = incoming.getSchema();

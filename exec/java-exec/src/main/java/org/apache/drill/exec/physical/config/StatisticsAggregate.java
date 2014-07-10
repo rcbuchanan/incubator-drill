@@ -27,7 +27,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
 
-@JsonTypeName("streaming-aggregate")
+@JsonTypeName("statistics-aggregate")
 public class StatisticsAggregate extends AbstractSingle {
 
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StatisticsAggregate.class);
@@ -55,7 +55,7 @@ public class StatisticsAggregate extends AbstractSingle {
 
   @Override
   public <T, X, E extends Throwable> T accept(PhysicalVisitor<T, X, E> physicalVisitor, X value) throws E{
-    return physicalVisitor.visitStreamingAggregate(this, value);
+    return physicalVisitor.visitStatisticsAggregate(this, value);
   }
 
   @Override

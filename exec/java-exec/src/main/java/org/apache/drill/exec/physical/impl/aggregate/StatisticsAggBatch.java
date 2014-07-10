@@ -42,8 +42,8 @@ import org.apache.drill.exec.expr.fn.FunctionGenerationHelper;
 import org.apache.drill.exec.memory.BufferAllocator;
 import org.apache.drill.exec.memory.OutOfMemoryException;
 import org.apache.drill.exec.ops.FragmentContext;
-import org.apache.drill.exec.physical.config.StreamingAggregate;
-import org.apache.drill.exec.physical.impl.aggregate.StreamingAggregator.AggOutcome;
+import org.apache.drill.exec.physical.config.StatisticsAggregate;
+import org.apache.drill.exec.physical.impl.aggregate.StatisticsAggregator.AggOutcome;
 import org.apache.drill.exec.record.AbstractRecordBatch;
 import org.apache.drill.exec.record.BatchSchema;
 import org.apache.drill.exec.record.BatchSchema.SelectionVectorMode;
@@ -60,15 +60,15 @@ import com.google.common.collect.Lists;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JVar;
 
-public class StatisticsAggBatch extends AbstractRecordBatch<StreamingAggregate> {
+public class StatisticsAggBatch extends AbstractRecordBatch<StatisticsAggregate> {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StatisticsAggBatch.class);
 
-  private StreamingAggregator aggregator;
+  private StatisticsAggregator aggregator;
   private final RecordBatch incoming;
   private boolean done = false;
   private boolean first = true;
 
-  public StatisticsAggBatch(StreamingAggregate popConfig, RecordBatch incoming, FragmentContext context) throws OutOfMemoryException {
+  public StatisticsAggBatch(StatisticsAggregate popConfig, RecordBatch incoming, FragmentContext context) throws OutOfMemoryException {
     super(popConfig, context);
     this.incoming = incoming;
   }
@@ -167,8 +167,8 @@ public class StatisticsAggBatch extends AbstractRecordBatch<StreamingAggregate> 
 
 
 
-  private StreamingAggregator createAggregatorInternal() throws SchemaChangeException, ClassTransformationException, IOException{
-    ClassGenerator<StreamingAggregator> cg = CodeGenerator.getRoot(StreamingAggTemplate.TEMPLATE_DEFINITION, context.getFunctionRegistry());
+  private StatisticsAggregator createAggregatorInternal() throws SchemaChangeException, ClassTransformationException, IOException{
+    ClassGenerator<StatisticsAggregator> cg = CodeGenerator.getRoot(StatisticsAggTemplate.TEMPLATE_DEFINITION, context.getFunctionRegistry());
     container.clear();
 
     LogicalExpression[] keyExprs = new LogicalExpression[popConfig.getKeys().length];
@@ -210,7 +210,7 @@ public class StatisticsAggBatch extends AbstractRecordBatch<StreamingAggregate> 
     getIndex(cg);
 
     container.buildSchema(SelectionVectorMode.NONE);
-    StreamingAggregator agg = context.getImplementationClass(cg);
+    StatisticsAggregator agg = context.getImplementationClass(cg);
     agg.setup(context, incoming, this);
     return agg;
   }
@@ -221,7 +221,7 @@ public class StatisticsAggBatch extends AbstractRecordBatch<StreamingAggregate> 
   private final MappingSet IS_SAME_I1 = new MappingSet("index1", null, IS_SAME, IS_SAME);
   private final MappingSet IS_SAME_I2 = new MappingSet("index2", null, IS_SAME, IS_SAME);
 
-  private void setupIsSame(ClassGenerator<StreamingAggregator> cg, LogicalExpression[] keyExprs){
+  private void setupIsSame(ClassGenerator<StatisticsAggregator> cg, LogicalExpression[] keyExprs){
     cg.setMappingSet(IS_SAME_I1);
     for(LogicalExpression expr : keyExprs){
       // first, we rewrite the evaluation stack for each side of the comparison.
@@ -242,7 +242,7 @@ public class StatisticsAggBatch extends AbstractRecordBatch<StreamingAggregate> 
   private final MappingSet ISA_B1 = new MappingSet("b1Index", null, "b1", null, IS_SAME_PREV_INTERNAL_BATCH_READ, IS_SAME_PREV_INTERNAL_BATCH_READ);
   private final MappingSet ISA_B2 = new MappingSet("b2Index", null, "incoming", null, IS_SAME_PREV, IS_SAME_PREV);
 
-  private void setupIsSameApart(ClassGenerator<StreamingAggregator> cg, LogicalExpression[] keyExprs){
+  private void setupIsSameApart(ClassGenerator<StatisticsAggregator> cg, LogicalExpression[] keyExprs){
     cg.setMappingSet(ISA_B1);
     for(LogicalExpression expr : keyExprs){
       // first, we rewrite the evaluation stack for each side of the comparison.
@@ -262,7 +262,7 @@ public class StatisticsAggBatch extends AbstractRecordBatch<StreamingAggregate> 
   private final GeneratorMapping EVAL_OUTSIDE = GeneratorMapping.create("setupInterior", "outputRecordValues", "resetValues", "cleanup");
   private final MappingSet EVAL = new MappingSet("index", "outIndex", "incoming", "outgoing", EVAL_INSIDE, EVAL_OUTSIDE, EVAL_INSIDE);
 
-  private void addRecordValues(ClassGenerator<StreamingAggregator> cg, LogicalExpression[] valueExprs){
+  private void addRecordValues(ClassGenerator<StatisticsAggregator> cg, LogicalExpression[] valueExprs){
     cg.setMappingSet(EVAL);
     for(LogicalExpression ex : valueExprs){
       HoldingContainer hc = cg.addExpr(ex);
@@ -273,7 +273,7 @@ public class StatisticsAggBatch extends AbstractRecordBatch<StreamingAggregate> 
 
   private final MappingSet RECORD_KEYS = new MappingSet(GeneratorMapping.create("setupInterior", "outputRecordKeys", null, null));
 
-  private void outputRecordKeys(ClassGenerator<StreamingAggregator> cg, TypedFieldId[] keyOutputIds, LogicalExpression[] keyExprs){
+  private void outputRecordKeys(ClassGenerator<StatisticsAggregator> cg, TypedFieldId[] keyOutputIds, LogicalExpression[] keyExprs){
     cg.setMappingSet(RECORD_KEYS);
     for(int i =0; i < keyExprs.length; i++){
       HoldingContainer hc = cg.addExpr(new ValueVectorWriteExpression(keyOutputIds[i], keyExprs[i], true));
@@ -288,7 +288,7 @@ public class StatisticsAggBatch extends AbstractRecordBatch<StreamingAggregate> 
   private final GeneratorMapping PREVIOUS_KEYS = GeneratorMapping.create("outputRecordKeysPrev", "outputRecordKeysPrev", null, null);
   private final MappingSet RECORD_KEYS_PREV = new MappingSet("previousIndex", "outIndex", "previous", null, PREVIOUS_KEYS, PREVIOUS_KEYS);
 
-  private void outputRecordKeysPrev(ClassGenerator<StreamingAggregator> cg, TypedFieldId[] keyOutputIds, LogicalExpression[] keyExprs){
+  private void outputRecordKeysPrev(ClassGenerator<StatisticsAggregator> cg, TypedFieldId[] keyOutputIds, LogicalExpression[] keyExprs){
     cg.setMappingSet(RECORD_KEYS_PREV);
 
     for(int i =0; i < keyExprs.length; i++){
@@ -305,7 +305,7 @@ public class StatisticsAggBatch extends AbstractRecordBatch<StreamingAggregate> 
     cg.getBlock(BlockType.EVAL)._return(JExpr.TRUE);
   }
 
-  private void getIndex(ClassGenerator<StreamingAggregator> g){
+  private void getIndex(ClassGenerator<StatisticsAggregator> g){
     switch(incoming.getSchema().getSelectionVectorMode()){
     case FOUR_BYTE: {
       JVar var = g.declareClassField("sv4_", g.getModel()._ref(SelectionVector4.class));

@@ -26,13 +26,13 @@ import org.apache.drill.exec.vector.allocator.VectorAllocator;
 
 public interface StatisticsAggregator {
 
-  public static TemplateClassDefinition<StatisticsAggregator> TEMPLATE_DEFINITION = new TemplateClassDefinition<StatisticsAggregator>(StatisticsAggregator.class, StreamingAggTemplate.class);
+  public static TemplateClassDefinition<StatisticsAggregator> TEMPLATE_DEFINITION = new TemplateClassDefinition<StatisticsAggregator>(StatisticsAggregator.class, StatisticsAggTemplate.class);
 
   public static enum AggOutcome {
 	    RETURN_OUTCOME, CLEANUP_AND_RETURN, UPDATE_AGGREGATOR;
 	  }
 
-  public abstract void setup(FragmentContext context, RecordBatch incoming, StreamingAggBatch outgoing) throws SchemaChangeException;
+  public abstract void setup(FragmentContext context, RecordBatch incoming, StatisticsAggBatch outgoing) throws SchemaChangeException;
 
   public abstract IterOutcome getOutcome();
 

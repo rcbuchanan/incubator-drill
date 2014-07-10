@@ -21,19 +21,19 @@ import java.util.List;
 
 import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.exec.ops.FragmentContext;
-import org.apache.drill.exec.physical.config.StreamingAggregate;
+import org.apache.drill.exec.physical.config.StatisticsAggregate;
 import org.apache.drill.exec.physical.impl.BatchCreator;
 import org.apache.drill.exec.record.RecordBatch;
 
 import com.google.common.base.Preconditions;
 
-public class StatisticsAggBatchCreator implements BatchCreator<StreamingAggregate>{
+public class StatisticsAggBatchCreator implements BatchCreator<StatisticsAggregate>{
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StatisticsAggBatchCreator.class);
 
   @Override
-  public RecordBatch getBatch(FragmentContext context, StreamingAggregate config, List<RecordBatch> children) throws ExecutionSetupException {
+  public RecordBatch getBatch(FragmentContext context, StatisticsAggregate config, List<RecordBatch> children) throws ExecutionSetupException {
     Preconditions.checkArgument(children.size() == 1);
-    return new StreamingAggBatch(config, children.iterator().next(), context);
+    return new StatisticsAggBatch(config, children.iterator().next(), context);
   }
   
   

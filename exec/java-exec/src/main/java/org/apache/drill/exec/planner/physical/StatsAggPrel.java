@@ -24,7 +24,7 @@ import java.util.List;
 
 import org.apache.drill.common.logical.data.NamedExpression;
 import org.apache.drill.exec.physical.base.PhysicalOperator;
-import org.apache.drill.exec.physical.config.StreamingAggregate;
+import org.apache.drill.exec.physical.config.StatisticsAggregate;
 import org.apache.drill.exec.planner.cost.DrillCostBase;
 import org.apache.drill.exec.planner.cost.DrillCostBase.DrillCostFactory;
 import org.apache.drill.exec.planner.logical.DrillParseContext;
@@ -82,7 +82,7 @@ public class StatsAggPrel extends AggPrelBase implements Prel{
   public PhysicalOperator getPhysicalOperator(PhysicalPlanCreator creator) throws IOException {
 
     Prel child = (Prel) this.getChild();
-    StreamingAggregate g = new StreamingAggregate(child.getPhysicalOperator(creator), keys.toArray(new NamedExpression[keys.size()]),
+    StatisticsAggregate g = new StatisticsAggregate(child.getPhysicalOperator(creator), keys.toArray(new NamedExpression[keys.size()]),
         aggExprs.toArray(new NamedExpression[aggExprs.size()]), 1.0f);
 
     return creator.addMetadata(this, g);
