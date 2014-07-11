@@ -24,7 +24,11 @@
 
 package org.apache.drill.exec.expr.fn.impl;
 
+import java.io.IOException;
+import java.io.InputStream;
+
 import org.apache.drill.exec.expr.DrillAggFunc;
+import org.apache.drill.exec.expr.DrillSimpleFunc;
 import org.apache.drill.exec.expr.annotations.FunctionTemplate;
 import org.apache.drill.exec.expr.annotations.FunctionTemplate.NullHandling;
 import org.apache.drill.exec.expr.annotations.FunctionTemplate.FunctionScope;
@@ -49,13 +53,186 @@ import org.apache.drill.exec.expr.holders.UInt4Holder;
 import org.apache.drill.exec.expr.holders.NullableUInt4Holder;
 import org.apache.drill.exec.expr.holders.UInt8Holder;
 import org.apache.drill.exec.expr.holders.NullableUInt8Holder;
+import org.apache.drill.exec.expr.holders.VarBinaryHolder;
+import org.apache.drill.exec.expr.holders.VarCharHolder;
 import org.apache.drill.exec.record.RecordBatch;
+
+import com.clearspring.analytics.stream.cardinality.CardinalityMergeException;
+import com.clearspring.analytics.stream.cardinality.HyperLogLog;
 
 @SuppressWarnings("unused")
 public class BooleanAggrFunctions {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(BooleanAggrFunctions.class);
 
+  @FunctionTemplate(name = "hll", scope = FunctionTemplate.FunctionScope.POINT_AGGREGATE)
+  public static class HllAggregate implements DrillAggFunc{
 
+    @Param VarCharHolder in;
+    @Workspace VarBinaryHolder data;
+    @Output VarBinaryHolder out;
+
+    public void setup(RecordBatch b) {
+      com.clearspring.analytics.stream.cardinality.HyperLogLog hll = 
+          new com.clearspring.analytics.stream.cardinality.HyperLogLog(10);
+      data = new VarBinaryHolder();
+
+      try {
+        byte [] ba = hll.getBytes();
+        data.buffer = io.netty.buffer.Unpooled.wrappedBuffer(ba);
+        data.start = 0;
+        data.end = ba.length;
+      } catch (java.io.IOException e) {
+        e.printStackTrace();
+      }
+    }
+
+    @Override
+    public void add() {
+      com.clearspring.analytics.stream.cardinality.HyperLogLog hll;
+      try {
+        hll = com.clearspring.analytics.stream.cardinality.HyperLogLog.Builder.build(data.buffer.array());
+        hll.offer(in.toString());
+        data.buffer.setBytes(data.start, hll.getBytes());
+      } catch (java.io.IOException e) {
+        e.printStackTrace();
+      }
+    }
+
+    @Override
+    public void output() {
+      out.start = data.start;
+      out.buffer = data.buffer;
+      out.end = data.end;
+    }
+
+    @Override
+    public void reset() {
+    }
+  }
+  
+  @FunctionTemplate(name = "hll_count", scope = FunctionTemplate.FunctionScope.POINT_AGGREGATE)
+  public static class HllCountAggregate implements DrillAggFunc{
+
+    @Param VarCharHolder in;
+    @Workspace VarBinaryHolder data;
+    @Output BigIntHolder out;
+
+    public void setup(RecordBatch b) {
+      com.clearspring.analytics.stream.cardinality.HyperLogLog hll = 
+          new com.clearspring.analytics.stream.cardinality.HyperLogLog(10);
+      data = new VarBinaryHolder();
+
+      try {
+        byte [] ba = hll.getBytes();
+        data.buffer = io.netty.buffer.Unpooled.wrappedBuffer(ba);
+        data.start = 0;
+        data.end = ba.length;
+      } catch (java.io.IOException e) {
+        e.printStackTrace();
+      }
+    }
+
+    @Override
+    public void add() {
+      com.clearspring.analytics.stream.cardinality.HyperLogLog hll;
+      try {
+        hll = com.clearspring.analytics.stream.cardinality.HyperLogLog.Builder.build(data.buffer.array());
+        hll.offer(in.toString());
+        data.buffer.setBytes(data.start, hll.getBytes());
+      } catch (java.io.IOException e) {
+        e.printStackTrace();
+      }
+    }
+
+    @Override
+    public void output() {
+      try {
+        out.value = com.clearspring.analytics.stream.cardinality.HyperLogLog.Builder.build(data.buffer.array()).cardinality();
+      } catch (java.io.IOException e) {
+        e.printStackTrace();
+      }
+    }
+
+    @Override
+    public void reset() {
+    }
+  }
+  
+  @FunctionTemplate(name = "hll_decode", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
+  public static class HllDecode implements DrillSimpleFunc{
+
+    @Param VarBinaryHolder in;
+    @Output BigIntHolder out;
+    @Workspace java.util.regex.Pattern regPattern;
+
+    public void setup(RecordBatch incoming){
+    }
+
+    public void eval(){
+      byte [] din = new byte[in.end - in.start];
+      in.buffer.getBytes(in.start, din);
+      
+      try {
+        out.value = com.clearspring.analytics.stream.cardinality.HyperLogLog.Builder.build(din).cardinality();
+      } catch (java.io.IOException e) {
+        e.printStackTrace();
+      }
+    }
+  }
+  
+  @FunctionTemplate(name = "hll_merge", scope = FunctionTemplate.FunctionScope.POINT_AGGREGATE)
+  public static class HllMergeAggregate implements DrillAggFunc{
+
+    @Param VarBinaryHolder in;
+    @Workspace VarBinaryHolder data;
+    @Output VarBinaryHolder out;
+
+    public void setup(RecordBatch b) {
+      com.clearspring.analytics.stream.cardinality.HyperLogLog hll = 
+          new com.clearspring.analytics.stream.cardinality.HyperLogLog(10);
+      data = new VarBinaryHolder();
+      
+      try {
+        byte [] ba = hll.getBytes();
+        data.buffer = io.netty.buffer.Unpooled.wrappedBuffer(ba);
+        data.start = 0;
+        data.end = ba.length;
+      } catch (java.io.IOException e) {
+        e.printStackTrace();
+      }
+    }
+
+    @Override
+    public void add() {
+      com.clearspring.analytics.stream.cardinality.HyperLogLog hll;
+      try {
+        hll = com.clearspring.analytics.stream.cardinality.HyperLogLog.Builder.build(data.buffer.array());
+        
+        byte [] din = new byte[in.end - in.start];
+        in.buffer.getBytes(in.start, din);
+        
+        hll.addAll(com.clearspring.analytics.stream.cardinality.HyperLogLog.Builder.build(din));
+        
+        data.buffer.setBytes(data.start, hll.getBytes());
+      } catch (java.io.IOException e1) {
+        e1.printStackTrace();
+      } catch (com.clearspring.analytics.stream.cardinality.CardinalityMergeException e) {
+        e.printStackTrace();
+      }
+    }
+
+    @Override
+    public void output() {
+      out.start = data.start;
+      out.buffer = data.buffer;
+      out.end = data.end;
+    }
+
+    @Override
+    public void reset() {
+    }
+  }
+  
 @FunctionTemplate(name = "bool_or", scope = FunctionTemplate.FunctionScope.POINT_AGGREGATE)
 public static class BitBooleanOr implements DrillAggFunc{
 
