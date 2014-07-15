@@ -89,6 +89,7 @@ public abstract class StatisticsAggTemplate implements StatisticsAggregator {
       outcome = IterOutcome.NONE;
       return AggOutcome.CLEANUP_AND_RETURN;
     }
+    
     try{ // outside loop to ensure that first is set to false after the first run.
       outputCount = 0;
 
@@ -97,6 +98,7 @@ public abstract class StatisticsAggTemplate implements StatisticsAggregator {
         allocateOutgoing();
       }
 
+      // scan through empty batches in incoming
       if (incoming.getRecordCount() == 0) {
         outer: while (true) {
           IterOutcome out = outgoing.next(0, incoming);
@@ -128,8 +130,7 @@ public abstract class StatisticsAggTemplate implements StatisticsAggregator {
         return setOkAndReturn();
       }
 
-
-      // setup for new output and pick any remainder.
+      // handle deferred output that didn't fit in the last batch
       if (pendingOutput) {
         allocateOutgoing();
         pendingOutput = false;
@@ -137,37 +138,51 @@ public abstract class StatisticsAggTemplate implements StatisticsAggregator {
         if (!outputToBatch( previousIndex)) return tooBigFailure();
       }
 
+      // if we got this far, nothing is pending, so if this aggregator needs to be replaced with
+      // a new schema, its safe.
       if(newSchema){
         return AggOutcome.UPDATE_AGGREGATOR;
       }
 
+      // if a "last" outcome occurred on the previous iteration, then we should quit instead of
+      // iterating (lastOutcome can only be STOP, NONE, or null).
       if(lastOutcome != null){
         outcome = lastOutcome;
         return AggOutcome.CLEANUP_AND_RETURN;
       }
 
       outside: while(true){
-      // loop through existing records, adding as necessary.
+        // loop through existing records, adding as necessary.
         for (; underlyingIndex < incoming.getRecordCount(); incIndex()) {
           if(EXTRA_DEBUG) logger.debug("Doing loop with values underlying {}, current {}", underlyingIndex, currentIndex);
+
+          // workspace starts clean, so just add the first record normally
           if (previousIndex == -1) {
             if (EXTRA_DEBUG) logger.debug("Adding the initial row's keys and values.");
             addRecordInc(currentIndex);
           }
+          // same records just get added on top as well
           else if (isSame( previousIndex, currentIndex )) {
             if(EXTRA_DEBUG) logger.debug("Values were found the same, adding.");
             addRecordInc(currentIndex);
+
+          // when the record changes, the workspace must first be written to output
           } else {
             if(EXTRA_DEBUG) logger.debug("Values were different, outputting previous batch.");
+            
             if (outputToBatch(previousIndex)) {
+              
+              // if output succeeds, then the workspace is clear to add to
               if(EXTRA_DEBUG) logger.debug("Output successful.");
               addRecordInc(currentIndex);
+
             } else {
+              // if output fails, there wasn't enough space and we'll have to try again
+              // later when there's more output vector space available
               if(EXTRA_DEBUG) logger.debug("Output failed.");
               if(outputCount == 0) return tooBigFailure();
-
-              // mark the pending output but move forward for the next cycle.
               pendingOutput = true;
+              // ???? I don't understand this.
               previousIndex = currentIndex;
               incIndex();
               return setOkAndReturn();
@@ -178,27 +193,41 @@ public abstract class StatisticsAggTemplate implements StatisticsAggregator {
         }
 
 
+        
         InternalBatch previous = null;
 
         try{
+          // scan through incoming batches to ??????
           while(true){
+            // ????? clear the previous batch to save its schema ?????
+            // or this this just allocation trickery?
             if (previous != null) {
               previous.clear();
             }
+            
+            // ??????
             previous = new InternalBatch(incoming);
             IterOutcome out = outgoing.next(0, incoming);
             if(EXTRA_DEBUG) logger.debug("Received IterOutcome of {}", out);
+            
             switch(out){
+            
             case NONE:
               done = true;
               lastOutcome = out;
+              
+              //
               if (first && addedRecordCount == 0) {
                 return setOkAndReturn();
+              
               } else if(addedRecordCount > 0){
                 if( !outputToBatchPrev( previous, previousIndex, outputCount) ) remainderBatch = previous;
                 if(EXTRA_DEBUG) logger.debug("Received no more batches, returning.");
                 return setOkAndReturn();
+              
+              //
               }else{
+                // don't think this can actually happen???
                 if (first && out == IterOutcome.OK) {
                   out = IterOutcome.OK_NEW_SCHEMA;
                 }
@@ -206,20 +235,22 @@ public abstract class StatisticsAggTemplate implements StatisticsAggregator {
                 return AggOutcome.CLEANUP_AND_RETURN;
               }
 
-
-
             case NOT_YET:
               this.outcome = out;
               return AggOutcome.RETURN_OUTCOME;
-
+            
+            // 
             case OK_NEW_SCHEMA:
               if(EXTRA_DEBUG) logger.debug("Received new schema.  Batch has {} records.", incoming.getRecordCount());
+              
               if(addedRecordCount > 0){
                 if( !outputToBatchPrev( previous, previousIndex, outputCount) ) remainderBatch = previous;
                 if(EXTRA_DEBUG) logger.debug("Wrote out end of previous batch, returning.");
                 newSchema = true;
                 return setOkAndReturn();
               }
+              
+              // handle an empty batch
               cleanup();
               return AggOutcome.UPDATE_AGGREGATOR;
             case OK:
@@ -234,7 +265,9 @@ public abstract class StatisticsAggTemplate implements StatisticsAggregator {
                   incIndex();
                   if(EXTRA_DEBUG) logger.debug("Continuing outside");
                   continue outside;
-                }else{ // not the same
+                
+                // 
+                }else{
                   if(EXTRA_DEBUG) logger.debug("This is not the same as the previous, add record and continue outside.");
                   previousIndex = currentIndex;
                   if(addedRecordCount > 0){
@@ -296,7 +329,6 @@ public abstract class StatisticsAggTemplate implements StatisticsAggregator {
   }
 
   private final boolean outputToBatch(int inIndex){
-
     if(!outputRecordKeys(inIndex, outputCount)){
       if(EXTRA_DEBUG) logger.debug("Failure while outputting keys {}", outputCount);
       return false;
@@ -337,6 +369,10 @@ public abstract class StatisticsAggTemplate implements StatisticsAggregator {
     if(remainderBatch != null) remainderBatch.clear();
   }
 
+  
+  public boolean outputRecordValuesSet(int outIndex) {
+    return outputRecordValues1() && outputRecordValues2() && outputRecordValues3();
+  }
 
   public abstract void setupInterior(@Named("incoming") RecordBatch incoming, @Named("outgoing") RecordBatch outgoing) throws SchemaChangeException;
   public abstract boolean isSame(@Named("index1") int index1, @Named("index2") int index2);

@@ -178,22 +178,43 @@ public class StatisticsAggBatch extends AbstractRecordBatch<StatisticsAggregate>
     ClassGenerator<StatisticsAggregator> cg = CodeGenerator.getRoot(StatisticsAggTemplate.TEMPLATE_DEFINITION, context.getFunctionRegistry());
     container.clear();
 
-    LogicalExpression[] keyExprs = new LogicalExpression[1];
+    LogicalExpression[] keyExprs = new LogicalExpression[incoming.getSchema().getFieldCount() * 2];
     LogicalExpression[] valueExprs = new LogicalExpression[incoming.getSchema().getFieldCount() * funcs.length];
-    TypedFieldId[] keyOutputIds = new TypedFieldId[1];
+    TypedFieldId[] keyOutputIds = new TypedFieldId[2];
 
     ErrorCollector collector = new ErrorCollectorImpl();
 
-    {
-      final LogicalExpression expr = ExpressionTreeMaterializer.materialize(
+    ValueVector schemaIdVector = null;
+    MaterializedField schemaIdOutputField = null;
+    ValueVector columnNameVector = null;
+    MaterializedField columnNameOutputField = null;
+    for (int i = 0; i < incoming.getSchema().getFieldCount(); i++) {
+      LogicalExpression expr;
+      MaterializedField outputField;
+      
+      expr = ExpressionTreeMaterializer.materialize(
           new ValueExpressions.IntExpression(schemaId++, ExpressionPosition.UNKNOWN),
           incoming, collector, context.getFunctionRegistry() );
-      keyExprs[0] = expr;
-      final MaterializedField outputField = MaterializedField.create("schemaId", expr.getMajorType());
-      ValueVector vector = TypeHelper.getNewVector(outputField, oContext.getAllocator());
-      keyOutputIds[0] = container.add(vector);
+      keyExprs[2 * i] = expr;
+      schemaIdOutputField = MaterializedField.create("schemaId", expr.getMajorType());
+      if (schemaIdVector == null) {
+        schemaIdVector = TypeHelper.getNewVector(schemaIdOutputField, oContext.getAllocator());
+      }
+      keyOutputIds[2 * i] = container.add(schemaIdVector);
+      
+      expr = ExpressionTreeMaterializer.materialize(
+          new ValueExpressions.QuotedString(
+              incoming.getSchema().getColumn(i).getLastName(), ExpressionPosition.UNKNOWN),
+          incoming, collector, context.getFunctionRegistry() );
+      keyExprs[2 * i + 1] = expr;
+      
+      if (columnNameVector == null) {
+        columnNameOutputField = MaterializedField.create("column", expr.getMajorType());
+        columnNameVector = TypeHelper.getNewVector(columnNameOutputField, oContext.getAllocator());
+      }
+      keyOutputIds[2 * i + 1] = container.add(columnNameVector);
     }
-
+    
     for (int i = 0; i < funcs.length; i++) {
       for(int j = 0; j < incoming.getSchema().getFieldCount(); j++){
         List<LogicalExpression> args = Lists.newArrayList();
@@ -295,7 +316,9 @@ public class StatisticsAggBatch extends AbstractRecordBatch<StatisticsAggregate>
     for(int i =0; i < keyExprs.length; i++){
       HoldingContainer hc = cg.addExpr(new ValueVectorWriteExpression(keyOutputIds[i], keyExprs[i], true));
       cg.getBlock(BlockType.EVAL)._if(hc.getValue().eq(JExpr.lit(0)))._then()._return(JExpr.FALSE);
+      //hc.
     }
+    //JExpr.
     cg.getBlock(BlockType.EVAL)._return(JExpr.TRUE);
   }
 
