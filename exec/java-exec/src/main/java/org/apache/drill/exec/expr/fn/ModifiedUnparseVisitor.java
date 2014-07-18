@@ -64,6 +64,19 @@ import java.util.Set;
 
 import org.codehaus.janino.JaninoRuntimeException;
 import org.codehaus.janino.Java;
+import org.codehaus.janino.Java.AssertStatement;
+import org.codehaus.janino.Java.BooleanLiteral;
+import org.codehaus.janino.Java.CharacterLiteral;
+import org.codehaus.janino.Java.ElementValueArrayInitializer;
+import org.codehaus.janino.Java.FloatingPointLiteral;
+import org.codehaus.janino.Java.ForEachStatement;
+import org.codehaus.janino.Java.IntegerLiteral;
+import org.codehaus.janino.Java.MarkerAnnotation;
+import org.codehaus.janino.Java.NormalAnnotation;
+import org.codehaus.janino.Java.NullLiteral;
+import org.codehaus.janino.Java.SimpleConstant;
+import org.codehaus.janino.Java.SingleElementAnnotation;
+import org.codehaus.janino.Java.StringLiteral;
 import org.codehaus.janino.Mod;
 import org.codehaus.janino.Parser;
 import org.codehaus.janino.Scanner;
@@ -175,7 +188,7 @@ public class ModifiedUnparseVisitor implements ComprehensiveVisitor {
     }
     public void visitConstructorDeclarator(Java.ConstructorDeclarator cd) {
         this.unparseDocComment(cd);
-        this.unparseModifiers(cd.modifiers);
+        this.unparseModifiers(cd.modifiers.flags);
         Java.ClassDeclaration declaringClass = cd.getDeclaringClass();
         this.pw.print(
             declaringClass instanceof Java.NamedClassDeclaration
@@ -231,7 +244,7 @@ public class ModifiedUnparseVisitor implements ComprehensiveVisitor {
     }
     public void visitFieldDeclaration(Java.FieldDeclaration fd) {
         this.unparseDocComment(fd);
-        this.unparseModifiers(fd.modifiers);
+        this.unparseModifiers(fd.modifiers.flags);
         this.unparseType(fd.type);
         this.pw.print(' ');
         for (int i = 0; i < fd.variableDeclarators.length; ++i) {
@@ -337,7 +350,7 @@ public class ModifiedUnparseVisitor implements ComprehensiveVisitor {
         this.unparseTypeDeclaration(lcds.lcd);
     }
     public void visitLocalVariableDeclarationStatement(Java.LocalVariableDeclarationStatement lvds) {
-        this.unparseModifiers(lvds.modifiers);
+        this.unparseModifiers(lvds.modifiers.flags);
         this.unparseType(lvds.type);
         this.pw.print(' ');
         this.pw.print(AutoIndentWriter.TABULATOR);
@@ -749,7 +762,7 @@ public class ModifiedUnparseVisitor implements ComprehensiveVisitor {
 
     private void unparseNamedClassDeclaration(Java.NamedClassDeclaration ncd) {
         this.unparseDocComment(ncd);
-        this.unparseModifiers(ncd.getModifiers());
+        this.unparseModifiers(ncd.getModifierFlags());
         this.pw.print("class " + ncd.name);
         if (ncd.optionalExtendedType != null) {
             this.pw.print(" extends ");
@@ -826,9 +839,9 @@ public class ModifiedUnparseVisitor implements ComprehensiveVisitor {
     }
     private void unparseInterfaceDeclaration(Java.InterfaceDeclaration id) {
         this.unparseDocComment(id);
-        this.unparseModifiers(id.getModifiers());
+        this.unparseModifiers(id.getModifierFlags());
         //make sure we print "interface", even if it wasn't in the modifiers
-        if ((id.getModifiers() & Mod.INTERFACE) == 0) {
+        if ((id.getModifierFlags() & Mod.INTERFACE) == 0) {
             this.pw.print("interface ");
         }
         this.pw.print(id.name);
@@ -856,10 +869,10 @@ public class ModifiedUnparseVisitor implements ComprehensiveVisitor {
         }
     }
     private void unparseFunctionDeclaratorRest(Java.FunctionDeclarator fd) {
-        boolean big = fd.formalParameters.length >= 4;
+        boolean big = fd.formalParameters.parameters.length >= 4;
         this.pw.print('(');
         if (big) { this.pw.println(); this.pw.print(AutoIndentWriter.INDENT); }
-        for (int i = 0; i < fd.formalParameters.length; ++i) {
+        for (int i = 0; i < fd.formalParameters.parameters.length; ++i) {
             if (i > 0) {
                 if (big) {
                     this.pw.println(',');
@@ -868,7 +881,7 @@ public class ModifiedUnparseVisitor implements ComprehensiveVisitor {
                     this.pw.print(", ");
                 }
             }
-            this.unparseFormalParameter(fd.formalParameters[i]);
+            this.unparseFormalParameter(fd.formalParameters.parameters[i]);
         }
         if (big) { this.pw.println(); this.pw.print(AutoIndentWriter.UNINDENT); }
         this.pw.print(')');
@@ -915,6 +928,85 @@ public class ModifiedUnparseVisitor implements ComprehensiveVisitor {
         }
         if (big) { this.pw.println(); this.pw.print(AutoIndentWriter.UNINDENT); }
         this.pw.print(')');
+    }
+
+    @Override
+    public void visitAssertStatement(AssertStatement arg0) {
+      // TODO Auto-generated method stub
+      
+    }
+
+    @Override
+    public void visitForEachStatement(ForEachStatement arg0) {
+      // TODO Auto-generated method stub
+      
+    }
+
+    @Override
+    public void visitBooleanLiteral(BooleanLiteral arg0) {
+      // TODO Auto-generated method stub
+      
+    }
+
+    @Override
+    public void visitCharacterLiteral(CharacterLiteral arg0) {
+      // TODO Auto-generated method stub
+      
+    }
+
+    @Override
+    public void visitFloatingPointLiteral(FloatingPointLiteral arg0) {
+      // TODO Auto-generated method stub
+      
+    }
+
+    @Override
+    public void visitIntegerLiteral(IntegerLiteral arg0) {
+      // TODO Auto-generated method stub
+      
+    }
+
+    @Override
+    public void visitNullLiteral(NullLiteral arg0) {
+      // TODO Auto-generated method stub
+      
+    }
+
+    @Override
+    public void visitSimpleConstant(SimpleConstant arg0) {
+      // TODO Auto-generated method stub
+      
+    }
+
+    @Override
+    public void visitStringLiteral(StringLiteral arg0) {
+      // TODO Auto-generated method stub
+      
+    }
+
+    @Override
+    public void visitElementValueArrayInitializer(
+        ElementValueArrayInitializer arg0) {
+      // TODO Auto-generated method stub
+      
+    }
+
+    @Override
+    public void visitMarkerAnnotation(MarkerAnnotation arg0) {
+      // TODO Auto-generated method stub
+      
+    }
+
+    @Override
+    public void visitNormalAnnotation(NormalAnnotation arg0) {
+      // TODO Auto-generated method stub
+      
+    }
+
+    @Override
+    public void visitSingleElementAnnotation(SingleElementAnnotation arg0) {
+      // TODO Auto-generated method stub
+      
     }
 
 }
