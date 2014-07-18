@@ -17,7 +17,14 @@
  */
 package org.apache.drill.exec.sql;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+
+import net.hydromatic.optiq.SchemaPlus;
 import net.hydromatic.optiq.config.Lex;
+import net.hydromatic.optiq.impl.java.ReflectiveSchema;
+import net.hydromatic.optiq.jdbc.OptiqConnection;
 import net.hydromatic.optiq.tools.Frameworks;
 import net.hydromatic.optiq.tools.Planner;
 import net.hydromatic.optiq.tools.StdFrameworkConfig;
@@ -63,6 +70,38 @@ public class TestSqlBracketlessSyntax {
 
     DrillAssert.assertMultiLineStringEquals(expected, rewrittenQuery);
   }
-
+  
+  @Test
+  public void testOptiq() {
+    try {
+      Connection connection =
+          DriverManager.getConnection("jdbc:optiq:");
+      OptiqConnection optiqConnection =
+          connection.unwrap(OptiqConnection.class);
+      SchemaPlus rootSchema = optiqConnection.getRootSchema();
+      SchemaPlus schema = rootSchema.add("s", new ReflectiveSchema(new Object()));
+      optiqConnection.setSchema("s");
+      printSchema(rootSchema, 0);
+      ResultSet results = optiqConnection.createStatement().executeQuery("select * from \"metadata\".columns");
+      System.out.println(results.getMetaData().getColumnCount());
+    } catch (Throwable e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }
+  }
+  
+  public void printSchema(SchemaPlus s, int depth) {
+    for (int i = 0; i < depth; i++) {
+      System.out.print("  ");
+    }
+    System.out.print("\"" + s.getName() + "\" : ");
+    for (String tn : s.getTableNames()) {
+      System.out.print(tn + ", ");
+    }
+    System.out.println();
+    for (String sn : s.getSubSchemaNames()) {
+      printSchema(s.getSubSchema(sn), depth + 1);
+    }
+  }
 
 }

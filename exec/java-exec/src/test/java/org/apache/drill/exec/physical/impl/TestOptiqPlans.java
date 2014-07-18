@@ -17,10 +17,16 @@
  */
 package org.apache.drill.exec.physical.impl;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.util.List;
 
 import mockit.Injectable;
 import mockit.NonStrictExpectations;
+import net.hydromatic.optiq.SchemaPlus;
+import net.hydromatic.optiq.impl.java.ReflectiveSchema;
+import net.hydromatic.optiq.jdbc.OptiqConnection;
 
 import org.apache.drill.common.config.DrillConfig;
 import org.apache.drill.common.logical.LogicalPlan;
