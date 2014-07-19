@@ -41,6 +41,7 @@ import org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint;
 import org.apache.drill.exec.proto.ExecProtos.FragmentHandle;
 import org.apache.drill.exec.proto.GeneralRPCProtos.Ack;
 import org.apache.drill.exec.proto.UserBitShared.QueryId;
+import org.apache.drill.exec.proto.UserBitShared.QueryProfile;
 import org.apache.drill.exec.record.FragmentWritableBatch;
 import org.apache.drill.exec.record.MaterializedField;
 import org.apache.drill.exec.record.WritableBatch;
@@ -54,54 +55,35 @@ import org.apache.drill.exec.rpc.data.DataResponseHandler;
 import org.apache.drill.exec.rpc.data.DataRpcConfig;
 import org.apache.drill.exec.rpc.data.DataServer;
 import org.apache.drill.exec.rpc.data.DataTunnel;
+import org.apache.drill.exec.server.rest.ProfileWrapper;
+import org.apache.drill.exec.store.sys.PStore;
 import org.apache.drill.exec.vector.Float8Vector;
 import org.apache.drill.exec.vector.ValueVector;
 import org.apache.drill.exec.work.WorkManager.WorkerBee;
+import org.apache.drill.exec.work.foreman.QueryStatus;
 import org.apache.drill.exec.work.fragment.FragmentManager;
+import org.glassfish.jersey.server.mvc.Viewable;
 import org.junit.Test;
 
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.Lists;
 
+
 public class TestBitRpc extends ExecTest {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(TestBitRpc.class);
 
+  
+  
+  
+  
   @Test
-  public void testConnectionBackpressure(@Injectable WorkerBee bee, @Injectable final WorkEventBus workBus, @Injectable final FragmentManager fman, @Injectable final FragmentContext fcon) throws Exception {
-
-    final BootStrapContext c = new BootStrapContext(DrillConfig.create());
-    BootStrapContext c2 = new BootStrapContext(DrillConfig.create());
-
-
-    new NonStrictExpectations(){{
-      workBus.getOrCreateFragmentManager((FragmentHandle) any); result = fman;
-      workBus.getFragmentManager( (FragmentHandle) any); result = fman;
-      fman.getFragmentContext(); result = fcon;
-      fcon.getAllocator(); result = c.getAllocator();
-  }};
-
-
-    int port = 1234;
-
-    DataResponseHandler drp = new BitComTestHandler();
-    DataServer server = new DataServer(c, workBus, drp);
-
-
-    port = server.bind(port, false);
-    DrillbitEndpoint ep = DrillbitEndpoint.newBuilder().setAddress("localhost").setDataPort(port).build();
-    DataConnectionManager manager = new DataConnectionManager(FragmentHandle.getDefaultInstance(), ep, c2);
-    DataTunnel tunnel = new DataTunnel(manager);
-    AtomicLong max = new AtomicLong(0);
-    for (int i = 0; i < 40; i++) {
-      long t1 = System.currentTimeMillis();
-      tunnel.sendRecordBatch(new TimingOutcome(max), new FragmentWritableBatch(false, QueryId.getDefaultInstance(), 1,
-          1, 1, 1, getRandomBatch(c.getAllocator(), 5000)));
-      System.out.println(System.currentTimeMillis() - t1);
-      // System.out.println("sent.");
-    }
-    System.out.println(String.format("Max time: %d", max.get()));
-    assertTrue(max.get() > 2700);
-    Thread.sleep(5000);
+  public void testProtobufQuery(@Injectable WorkerBee bee) throws Exception {
+    PStore<QueryProfile> profiles = bee.getContext().getPersistentStoreProvider().getPStore(QueryStatus.QUERY_PROFILE);
+    QueryProfile profile = profiles.get("");
+    if(profile == null) profile = QueryProfile.getDefaultInstance();
+  
+    ProfileWrapper wrapper = new ProfileWrapper(profile);
+    
   }
 
   private static WritableBatch getRandomBatch(BufferAllocator allocator, int records) {
