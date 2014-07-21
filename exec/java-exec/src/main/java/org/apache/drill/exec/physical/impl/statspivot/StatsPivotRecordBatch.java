@@ -18,7 +18,10 @@
 package org.apache.drill.exec.physical.impl.statspivot;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.apache.drill.common.expression.ConvertExpression;
 import org.apache.drill.common.expression.ErrorCollector;
@@ -34,6 +37,7 @@ import org.apache.drill.common.expression.SchemaPath;
 import org.apache.drill.common.expression.ValueExpressions;
 import org.apache.drill.common.expression.fn.CastFunctions;
 import org.apache.drill.common.logical.data.NamedExpression;
+import org.apache.drill.common.types.TypeProtos.MajorType;
 import org.apache.drill.common.types.TypeProtos.MinorType;
 import org.apache.drill.common.types.Types;
 import org.apache.drill.exec.exception.ClassTransformationException;
@@ -49,9 +53,8 @@ import org.apache.drill.exec.expr.ValueVectorWriteExpression;
 import org.apache.drill.exec.expr.fn.DrillComplexWriterFuncHolder;
 import org.apache.drill.exec.memory.OutOfMemoryException;
 import org.apache.drill.exec.ops.FragmentContext;
-import org.apache.drill.exec.physical.config.Project;
+import org.apache.drill.exec.physical.config.StatsPivot;
 import org.apache.drill.exec.record.AbstractSingleRecordBatch;
-import org.apache.drill.exec.record.BatchSchema;
 import org.apache.drill.exec.record.BatchSchema.SelectionVectorMode;
 import org.apache.drill.exec.record.MaterializedField;
 import org.apache.drill.exec.record.RecordBatch;
@@ -59,25 +62,28 @@ import org.apache.drill.exec.record.TransferPair;
 import org.apache.drill.exec.record.TypedFieldId;
 import org.apache.drill.exec.record.VectorContainer;
 import org.apache.drill.exec.record.VectorWrapper;
+import org.apache.drill.exec.util.VectorUtil;
 import org.apache.drill.exec.vector.ValueVector;
 import org.apache.drill.exec.vector.complex.writer.BaseWriter.ComplexWriter;
 
 import com.carrotsearch.hppc.IntOpenHashSet;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.sun.codemodel.JExpr;
 
-public class StatsPivotRecordBatch extends AbstractSingleRecordBatch<Project>{
+public class StatsPivotRecordBatch extends AbstractSingleRecordBatch<StatsPivot>{
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StatsPivotRecordBatch.class);
 
-  private StatsPivotor projector;
+  private StatsPivotor statsPivotor;
   private List<ValueVector> allocationVectors;
   private List<ComplexWriter> complexWriters;
   private boolean hasRemainder = false;
   private int remainderIndex = 0;
   private int recordCount;
 
-  public StatsPivotRecordBatch(Project pop, RecordBatch incoming, FragmentContext context) throws OutOfMemoryException {
+  public StatsPivotRecordBatch(StatsPivot pop, RecordBatch incoming, FragmentContext context) throws OutOfMemoryException {
     super(pop, context, incoming);
   }
 
@@ -101,12 +107,12 @@ public class StatsPivotRecordBatch extends AbstractSingleRecordBatch<Project>{
 
   @Override
   protected void doWork() {
-//    VectorUtil.showVectorAccessibleContent(incoming, ",");
+    VectorUtil.showVectorAccessibleContent(incoming, ",");
     int incomingRecordCount = incoming.getRecordCount();
 
     doAlloc();
 
-    int outputRecords = projector.projectRecords(0, incomingRecordCount, 0);
+    int outputRecords = statsPivotor.pivotRecords(0, incomingRecordCount, 0);
     if (outputRecords < incomingRecordCount) {
       setValueCount(outputRecords);
       hasRemainder = true;
@@ -129,7 +135,7 @@ public class StatsPivotRecordBatch extends AbstractSingleRecordBatch<Project>{
   private void handleRemainder() {
     int remainingRecordCount = incoming.getRecordCount() - remainderIndex;
     doAlloc();
-    int projRecords = projector.projectRecords(remainderIndex, remainingRecordCount, 0);
+    int projRecords = statsPivotor.pivotRecords(remainderIndex, remainingRecordCount, 0);
     if (projRecords < remainingRecordCount) {
       setValueCount(projRecords);
       this.recordCount = projRecords;
@@ -240,52 +246,47 @@ public class StatsPivotRecordBatch extends AbstractSingleRecordBatch<Project>{
         container.add(tp.getTo());
       }
     }else{
-      for(int i = 0; i < exprs.size(); i++){
-        final NamedExpression namedExpression = exprs.get(i);
-        final LogicalExpression expr = ExpressionTreeMaterializer.materialize(namedExpression.getExpr(), incoming, collector, context.getFunctionRegistry(), true);
-        final MaterializedField outputField = MaterializedField.create(getRef(namedExpression), expr.getMajorType());
-        if(collector.hasErrors()){
-          throw new SchemaChangeException(String.format("Failure while trying to materialize incoming schema.  Errors:\n %s.", collector.toErrorString()));
-        }
-
-        // add value vector to transfer if direct reference and this is allowed, otherwise, add to evaluation stack.
-        if(expr instanceof ValueVectorReadExpression && incoming.getSchema().getSelectionVectorMode() == SelectionVectorMode.NONE
-                && !((ValueVectorReadExpression) expr).hasReadPath()
-                && !isAnyWildcard
-                && !transferFieldIds.contains(((ValueVectorReadExpression) expr).getFieldId().getFieldIds()[0])
-                && !((ValueVectorReadExpression) expr).hasReadPath()) {
-          ValueVectorReadExpression vectorRead = (ValueVectorReadExpression) expr;
-          TypedFieldId id = vectorRead.getFieldId();
-          ValueVector vvIn = incoming.getValueAccessorById(id.getIntermediateClass(), id.getFieldIds()).getValueVector();
-          Preconditions.checkNotNull(incoming);
-
-          TransferPair tp = vvIn.getTransferPair(getRef(namedExpression));
-          transfers.add(tp);
-          container.add(tp.getTo());
-          transferFieldIds.add(vectorRead.getFieldId().getFieldIds()[0]);
-//          logger.debug("Added transfer.");
-        } else if (expr instanceof DrillFuncHolderExpr &&
-                  ((DrillFuncHolderExpr) expr).isComplexWriterFuncHolder())  {
-          // Need to process ComplexWriter function evaluation.
-          // Lazy initialization of the list of complex writers, if not done yet.
-          if (complexWriters == null)
-            complexWriters = Lists.newArrayList();
-
-          // The reference name will be passed to ComplexWriter, used as the name of the output vector from the writer.
-          ((DrillComplexWriterFuncHolder) ((DrillFuncHolderExpr) expr).getHolder()).setReference(namedExpression.getRef());
-          cg.addExpr(expr);
-        } else{
-          // need to do evaluation.
-          ValueVector vector = TypeHelper.getNewVector(outputField, oContext.getAllocator());
+      final int inColCount = incoming.getSchema().getFieldCount();
+      Map<String, Integer> outCols = Maps.newHashMap();
+      int inToOut[] = new int[inColCount];
+      List<MaterializedField> outFields = Lists.newArrayList();
+      
+      for (int i = 0; i < inColCount; i++) {
+        MaterializedField inmf = incoming.getSchema().getColumn(i);
+        String [] ss = inmf.getLastName().split("_");
+        
+        String k = ss.length > 0 ? ss[ss.length - 1] : inmf.getLastName();
+        
+        if (!outCols.containsKey(k)) {
+          MaterializedField mf = MaterializedField.create(new FieldReference(k), inmf.getType());
+          ValueVector vector = TypeHelper.getNewVector(mf, oContext.getAllocator());
+          
+          outCols.put(k, outCols.size());
+          outFields.add(mf);
           allocationVectors.add(vector);
-          TypedFieldId fid = container.add(vector);
-          ValueVectorWriteExpression write = new ValueVectorWriteExpression(fid, expr, true);
-          HoldingContainer hc = cg.addExpr(write);
-
-          cg.getEvalBlock()._if(hc.getValue().eq(JExpr.lit(0)))._then()._return(JExpr.FALSE);
-          logger.debug("Added eval.");
+          container.add(vector);
         }
+        
+        inToOut[i] = outCols.get(k);
       }
+      
+      int outColCount = outFields.size();
+      int outWriters[] = new int[outColCount];
+      for (int i = 0; i < inColCount; i++) {
+        MaterializedField inmf = incoming.getSchema().getColumn(i);
+        SchemaPath outPath = outFields.get(inToOut[i]).getPath();
+        TypedFieldId fid = container.getValueVectorId(outPath);
+        
+        outWriters[inToOut[i]]++;
+        
+        ValueVectorWriteExpression write = new ValueVectorWriteExpression(fid, inmf.getPath(), true);
+        HoldingContainer hc = cg.addExpr(write);
+        
+        cg.getEvalBlock()._if(hc.getValue().eq(JExpr.lit(0)))._then()._return(JExpr.FALSE);
+        logger.debug("Added eval.");
+      }
+      
+      // fill in "missing" spots
     }
     cg.rotateBlock();
     cg.getEvalBlock()._return(JExpr.TRUE);
@@ -293,8 +294,8 @@ public class StatsPivotRecordBatch extends AbstractSingleRecordBatch<Project>{
     container.buildSchema(SelectionVectorMode.NONE);
 
     try {
-      this.projector = context.getImplementationClass(cg.getCodeGenerator());
-      projector.setup(context, incoming, this, transfers);
+      this.statsPivotor = context.getImplementationClass(cg.getCodeGenerator());
+      statsPivotor.setup(context, incoming, this, transfers);
     } catch (ClassTransformationException | IOException e) {
       throw new SchemaChangeException("Failure while attempting to load generated class", e);
     }

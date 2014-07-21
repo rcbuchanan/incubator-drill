@@ -43,7 +43,7 @@ public abstract class StatsPivotTemplate implements StatsPivotor {
   }
 
   @Override
-  public final int projectRecords(int startIndex, final int recordCount, int firstOutputIndex) {
+  public final int pivotRecords(int startIndex, final int recordCount, int firstOutputIndex) {
     switch(svMode){
     case FOUR_BYTE:
       throw new UnsupportedOperationException();
