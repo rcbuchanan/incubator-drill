@@ -17,55 +17,36 @@
  */
 package org.apache.drill.exec.server;
 
-import static org.junit.Assert.assertTrue;
-import io.netty.buffer.ByteBuf;
-
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 
-import mockit.Injectable;
-import mockit.NonStrictExpectations;
+import net.hydromatic.linq4j.BaseQueryable;
+import net.hydromatic.linq4j.Enumerator;
+import net.hydromatic.linq4j.QueryProvider;
+import net.hydromatic.linq4j.Queryable;
+import net.hydromatic.optiq.QueryableTable;
+import net.hydromatic.optiq.SchemaPlus;
+import net.hydromatic.optiq.TranslatableTable;
+import net.hydromatic.optiq.impl.AbstractSchema;
+import net.hydromatic.optiq.impl.ViewTable;
+import net.hydromatic.optiq.impl.java.AbstractQueryableTable;
+import net.hydromatic.optiq.impl.java.ReflectiveSchema;
+import net.hydromatic.optiq.jdbc.OptiqConnection;
 
-import org.apache.drill.common.config.DrillConfig;
-import org.apache.drill.common.expression.ExpressionPosition;
-import org.apache.drill.common.expression.SchemaPath;
-import org.apache.drill.common.types.TypeProtos.MinorType;
-import org.apache.drill.common.types.Types;
 import org.apache.drill.exec.ExecTest;
-import org.apache.drill.exec.expr.TypeHelper;
-import org.apache.drill.exec.memory.BufferAllocator;
-import org.apache.drill.exec.ops.FragmentContext;
-import org.apache.drill.exec.proto.BitData.FragmentRecordBatch;
-import org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint;
-import org.apache.drill.exec.proto.ExecProtos.FragmentHandle;
-import org.apache.drill.exec.proto.GeneralRPCProtos.Ack;
-import org.apache.drill.exec.proto.UserBitShared.QueryId;
-import org.apache.drill.exec.proto.UserBitShared.QueryProfile;
-import org.apache.drill.exec.record.FragmentWritableBatch;
-import org.apache.drill.exec.record.MaterializedField;
-import org.apache.drill.exec.record.WritableBatch;
-import org.apache.drill.exec.rpc.RemoteConnection;
-import org.apache.drill.exec.rpc.ResponseSender;
-import org.apache.drill.exec.rpc.RpcException;
-import org.apache.drill.exec.rpc.RpcOutcomeListener;
-import org.apache.drill.exec.rpc.control.WorkEventBus;
-import org.apache.drill.exec.rpc.data.DataConnectionManager;
-import org.apache.drill.exec.rpc.data.DataResponseHandler;
-import org.apache.drill.exec.rpc.data.DataRpcConfig;
-import org.apache.drill.exec.rpc.data.DataServer;
-import org.apache.drill.exec.rpc.data.DataTunnel;
-import org.apache.drill.exec.server.rest.ProfileWrapper;
-import org.apache.drill.exec.store.sys.PStore;
-import org.apache.drill.exec.vector.Float8Vector;
-import org.apache.drill.exec.vector.ValueVector;
-import org.apache.drill.exec.work.WorkManager.WorkerBee;
-import org.apache.drill.exec.work.foreman.QueryStatus;
-import org.apache.drill.exec.work.fragment.FragmentManager;
-import org.glassfish.jersey.server.mvc.Viewable;
+import org.eigenbase.reltype.RelDataType;
+import org.eigenbase.reltype.RelDataTypeFactory;
+import org.eigenbase.reltype.RelProtoDataType;
+import org.eigenbase.sql.type.SqlTypeName;
 import org.junit.Test;
 
-import com.google.common.base.Stopwatch;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
 
@@ -77,83 +58,239 @@ public class TestBitRpc extends ExecTest {
   
   
   @Test
-  public void testProtobufQuery(@Injectable WorkerBee bee) throws Exception {
-    PStore<QueryProfile> profiles = bee.getContext().getPersistentStoreProvider().getPStore(QueryStatus.QUERY_PROFILE);
-    QueryProfile profile = profiles.get("");
-    if(profile == null) profile = QueryProfile.getDefaultInstance();
+  public void testProtobufQuery() throws Exception {
+    try {
+      Class.forName("net.hydromatic.optiq.jdbc.Driver");
+      Connection connection =
+          DriverManager.getConnection("jdbc:optiq:");
+      OptiqConnection optiqConnection =
+          connection.unwrap(OptiqConnection.class);
+      SchemaPlus rootSchema = optiqConnection.getRootSchema();
+      rootSchema.add("hr", new ReflectiveSchema(new HrSchema()));
+      
+      ResultSet results = optiqConnection.createStatement().executeQuery(
+        "select \"deptno\", cardinality(\"employees\") as c\n"
+        + "from \"hr\".\"depts\""
+            );
+      printResultSet(results);
+    } catch (Throwable e) {
+      e.printStackTrace(System.out);
+    }
+  }
   
-    ProfileWrapper wrapper = new ProfileWrapper(profile);
+  public static class HrSchema {
+    @Override
+    public String toString() {
+      return "HrSchema";
+    }
+
+    public final Employee[] emps = {
+      new Employee(100, 10, "Bill", 10000, 1000),
+      new Employee(200, 20, "Eric", 8000, 500),
+      new Employee(150, 10, "Sebastian", 7000, null),
+      new Employee(110, 10, "Theodore", 11500, 250),
+    };
+    public final Department[] depts = {
+      new Department(10, "Sales", Arrays.asList(emps[0], emps[2])),
+      new Department(30, "Marketing", Collections.<Employee>emptyList()),
+      new Department(40, "HR", Collections.singletonList(emps[1])),
+    };
+
+    public QueryableTable foo(int count) {
+      return generateStrings(count);
+    }
+
+    public TranslatableTable view(String s) {
+      return view(s);
+    }
+  }
+  
+  public static class Employee {
+    public final int empid;
+    public final int deptno;
+    public final String name;
+    public final float salary;
+    public final Integer commission;
+
+    public Employee(int empid, int deptno, String name, float salary,
+        Integer commission) {
+      this.empid = empid;
+      this.deptno = deptno;
+      this.name = name;
+      this.salary = salary;
+      this.commission = commission;
+    }
+
+    public String toString() {
+      return "Employee [empid: " + empid + ", deptno: " + deptno
+          + ", name: " + name + "]";
+    }
+  }
+
+  public static class Department {
+    public final int deptno;
+    public final String name;
+    public final List<Employee> employees;
+
+    public Department(
+        int deptno, String name, List<Employee> employees) {
+      this.deptno = deptno;
+      this.name = name;
+      this.employees = employees;
+    }
+
+
+    public String toString() {
+      return "Department [deptno: " + deptno + ", name: " + name
+          + ", employees: " + employees + "]";
+    }
+  }
+  
+  public static class FooStruct {
+    public final int blah = 10;
+    private final int hidden = 42;
     
-  }
-
-  private static WritableBatch getRandomBatch(BufferAllocator allocator, int records) {
-    List<ValueVector> vectors = Lists.newArrayList();
-    for (int i = 0; i < 5; i++) {
-      Float8Vector v = (Float8Vector) TypeHelper.getNewVector(
-          MaterializedField.create(new SchemaPath("a", ExpressionPosition.UNKNOWN), Types.required(MinorType.FLOAT8)),
-          allocator);
-      v.allocateNew(records);
-      v.getMutator().generateTestData(records);
-      vectors.add(v);
+    public final BarStruct [] bars = {
+        new BarStruct(0),
+        new BarStruct(1),
+        new BarStruct(3)
+    };
+    
+    public int getHidden() {
+      return hidden;
     }
-    return WritableBatch.getBatchNoHV(records, vectors, false);
-  }
-
-  private class TimingOutcome implements RpcOutcomeListener<Ack> {
-    private AtomicLong max;
-    private Stopwatch watch = new Stopwatch().start();
-
-    public TimingOutcome(AtomicLong max) {
-      super();
-      this.max = max;
-    }
-
-    @Override
-    public void failed(RpcException ex) {
-      ex.printStackTrace();
-    }
-
-    @Override
-    public void success(Ack value, ByteBuf buffer) {
-      long micros = watch.elapsed(TimeUnit.MILLISECONDS);
-      System.out.println(String.format("Total time to send: %d, start time %d", micros, System.currentTimeMillis() - micros));
-      while (true) {
-        long nowMax = max.get();
-        if (nowMax < micros) {
-          if (max.compareAndSet(nowMax, micros))
-            break;
-        } else {
-          break;
-        }
+    
+    public static class BarStruct {
+      public final int depth;
+      private final String bonus = "hidden message";
+      public final List<FnordStruct> nest = Lists.newArrayList(new FnordStruct());
+      public final int K = 1;
+      
+      public String getMessage() {
+        return bonus;
+      }
+      
+      public static String getMagicString () {
+        return "riverrun";
+      }
+      
+      public BarStruct(int d) {
+        this.depth = d;
       }
     }
+    
+    public static class FnordStruct {
+      public final int K = 1;
+      public final double ah = Math.random();
+    }
+  }
+  
+  public static QueryableTable generateStrings(final Integer count) {
+    return new AbstractQueryableTable(IntString.class) {
+      public RelDataType getRowType(RelDataTypeFactory typeFactory) {
+        return typeFactory.createJavaType(IntString.class);
+      }
 
+      public <T> Queryable<T> asQueryable(QueryProvider queryProvider,
+          SchemaPlus schema, String tableName) {
+        BaseQueryable<IntString> queryable =
+            new BaseQueryable<IntString>(null, IntString.class, null) {
+              public Enumerator<IntString> enumerator() {
+                return new Enumerator<IntString>() {
+                  static final String Z = "abcdefghijklm";
+
+                  int i = 0;
+                  int curI;
+                  String curS;
+
+                  public IntString current() {
+                    return new IntString(curI, curS);
+                  }
+
+                  public boolean moveNext() {
+                    if (i < count) {
+                      curI = i;
+                      curS = Z.substring(0, i % Z.length());
+                      ++i;
+                      return true;
+                    } else {
+                      return false;
+                    }
+                  }
+
+                  public void reset() {
+                    i = 0;
+                  }
+
+                  public void close() {
+                  }
+                };
+              }
+            };
+        //noinspection unchecked
+        return (Queryable<T>) queryable;
+      }
+    };
   }
 
-  private class BitComTestHandler implements DataResponseHandler {
+  public static class IntString {
+    public final int n;
+    public final String s;
 
-    int v = 0;
+    public IntString(int n, String s) {
+      this.n = n;
+      this.s = s;
+    }
 
-    @Override
-    public void handle(RemoteConnection connection, FragmentManager manager, FragmentRecordBatch fragmentBatch, ByteBuf data, ResponseSender sender)
-        throws RpcException {
-      // System.out.println("Received.");
-      try {
-        v++;
-        if (v % 10 == 0) {
-          System.out.println("sleeping.");
-          Thread.sleep(3000);
-        }
-      } catch (InterruptedException e) {
-        // TODO Auto-generated catch block
-        e.printStackTrace();
+    public String toString() {
+      return "{n=" + n + ", s=" + s + "}";
+    }
+  }
+  
+  public static TranslatableTable view(String s) {
+    return new ViewTable(Object.class,
+        new RelProtoDataType() {
+          public RelDataType apply(RelDataTypeFactory typeFactory) {
+            return typeFactory.builder().add("c", SqlTypeName.INTEGER)
+                .build();
+          }
+        }, "values (1), (3), " + s, ImmutableList.<String>of());
+  }
+
+  public void printResultSet(ResultSet results) throws SQLException {
+    if (!results.next()) return;
+    
+    System.out.println("**** : " + results.getMetaData().getColumnCount());
+    for (int i = 1; i <= results.getMetaData().getColumnCount(); i++) {
+      System.out.print(results.getMetaData().getColumnName(i) + "\t");
+    }
+    System.out.println();
+    do {
+      for (int i = 1; i <= results.getMetaData().getColumnCount(); i++) {
+        System.out.print(i + ":" + results.getString(i) + "\t");
       }
-      sender.send(DataRpcConfig.OK);
+      System.out.println();
+    } while (results.next());
+  }
+  
+  public void exploreSchema(SchemaPlus s, int d) {
+    for (int i = 0; i < d; i++) {
+      System.out.print("  ");
     }
-
-    @Override
-    public void informOutOfMemory() {
+    
+    System.out.print("\"" + s.getName() + "\" (");
+    for (String fn : s.getFunctionNames()) {
+      System.out.print(fn + ", ");
     }
-
+    System.out.print(") : ");
+    
+    for (String tn : s.getTableNames()) {
+      System.out.print(tn + ", ");
+    }
+    System.out.println();
+    
+    for (String sn : s.getSubSchemaNames()) {
+      exploreSchema(s.getSubSchema(sn), d + 1);
+    }
   }
 }

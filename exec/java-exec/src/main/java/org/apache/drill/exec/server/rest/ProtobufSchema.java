@@ -412,13 +412,14 @@ public class ProtobufSchema extends AbstractSchema {
     @Override
     public Expression getExpression(SchemaPlus schema, String tableName,
         Class clazz) {
-      return Expressions.field(schema.unwrap(ProtobufSchema.class)
-          .getTargetExpression(schema.getParentSchema(), schema.getName()),
+      return Expressions.field(
+          schema.unwrap(ProtobufSchema.class).getTargetExpression(
+              schema.getParentSchema(), schema.getName()),
           field);
     }
   }
   
-  /** Table based on a Java field. */
+  /** Table based on a Java accessor. */
   private static class AccessorTable<T> extends ProtobufTable {
     private final Method accessor;
 
@@ -434,10 +435,11 @@ public class ProtobufSchema extends AbstractSchema {
     @Override
     public Expression getExpression(SchemaPlus schema, String tableName,
         Class clazz) {
-      return Expressions.constant(10);
-      /*return Expressions.call(schema.unwrap(ProtobufSchema.class)
-          .getTargetExpression(schema.getParentSchema(), schema.getName()),
-          accessor);*/
+      //return Expressions.constant(10);
+      return Expressions.call(
+          schema.unwrap(ProtobufSchema.class).getTargetExpression(
+              schema.getParentSchema(), schema.getName()),
+          accessor);
     }
   }
 }
