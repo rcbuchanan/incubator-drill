@@ -18,39 +18,35 @@
 package org.apache.drill.exec.physical.impl.statspivot;
 
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
-import org.apache.drill.common.expression.ConvertExpression;
+import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.drill.common.expression.ErrorCollector;
 import org.apache.drill.common.expression.ErrorCollectorImpl;
 import org.apache.drill.common.expression.ExpressionPosition;
 import org.apache.drill.common.expression.FieldReference;
-import org.apache.drill.common.expression.FunctionCall;
-import org.apache.drill.common.expression.FunctionCallFactory;
 import org.apache.drill.common.expression.LogicalExpression;
 import org.apache.drill.common.expression.PathSegment;
-import org.apache.drill.common.expression.PathSegment.NameSegment;
-import org.apache.drill.common.expression.SchemaPath;
 import org.apache.drill.common.expression.ValueExpressions;
-import org.apache.drill.common.expression.fn.CastFunctions;
+import org.apache.drill.common.expression.PathSegment.NameSegment;
+import org.apache.drill.common.expression.ValueExpressions.IntExpression;
+import org.apache.drill.common.expression.SchemaPath;
 import org.apache.drill.common.logical.data.NamedExpression;
+import org.apache.drill.common.types.Types;
 import org.apache.drill.common.types.TypeProtos.MajorType;
 import org.apache.drill.common.types.TypeProtos.MinorType;
-import org.apache.drill.common.types.Types;
+import org.apache.drill.exec.compile.sig.GeneratorMapping;
+import org.apache.drill.exec.compile.sig.MappingSet;
 import org.apache.drill.exec.exception.ClassTransformationException;
 import org.apache.drill.exec.exception.SchemaChangeException;
 import org.apache.drill.exec.expr.ClassGenerator;
 import org.apache.drill.exec.expr.ClassGenerator.HoldingContainer;
 import org.apache.drill.exec.expr.CodeGenerator;
-import org.apache.drill.exec.expr.DrillFuncHolderExpr;
 import org.apache.drill.exec.expr.ExpressionTreeMaterializer;
 import org.apache.drill.exec.expr.TypeHelper;
-import org.apache.drill.exec.expr.ValueVectorReadExpression;
 import org.apache.drill.exec.expr.ValueVectorWriteExpression;
-import org.apache.drill.exec.expr.fn.DrillComplexWriterFuncHolder;
 import org.apache.drill.exec.memory.OutOfMemoryException;
 import org.apache.drill.exec.ops.FragmentContext;
 import org.apache.drill.exec.physical.config.StatsPivot;
@@ -66,11 +62,9 @@ import org.apache.drill.exec.util.VectorUtil;
 import org.apache.drill.exec.vector.ValueVector;
 import org.apache.drill.exec.vector.complex.writer.BaseWriter.ComplexWriter;
 
-import com.carrotsearch.hppc.IntOpenHashSet;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
+import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JExpr;
 
 public class StatsPivotRecordBatch extends AbstractSingleRecordBatch<StatsPivot>{
@@ -82,7 +76,7 @@ public class StatsPivotRecordBatch extends AbstractSingleRecordBatch<StatsPivot>
   private boolean hasRemainder = false;
   private int remainderIndex = 0;
   private int recordCount;
-
+  
   public StatsPivotRecordBatch(StatsPivot pop, RecordBatch incoming, FragmentContext context) throws OutOfMemoryException {
     super(pop, context, incoming);
   }
@@ -107,19 +101,23 @@ public class StatsPivotRecordBatch extends AbstractSingleRecordBatch<StatsPivot>
 
   @Override
   protected void doWork() {
-    VectorUtil.showVectorAccessibleContent(incoming, ",");
+    // VectorUtil.showVectorAccessibleContent(incoming, ",");
     int incomingRecordCount = incoming.getRecordCount();
 
     doAlloc();
+    
+    System.out.println("INCOMING " + incomingRecordCount);
 
     int outputRecords = statsPivotor.pivotRecords(0, incomingRecordCount, 0);
-    if (outputRecords < incomingRecordCount) {
+    System.out.println("OUTPUTTED " + outputRecords);
+    
+    if (outputRecords < incomingRecordCount * statsPivotor.getRecordsPerRecord()) {
       setValueCount(outputRecords);
       hasRemainder = true;
       remainderIndex = outputRecords;
       this.recordCount = remainderIndex;
     } else {
-      setValueCount(incomingRecordCount);
+      setValueCount(outputRecords);
       for(VectorWrapper<?> v: incoming) {
         v.clear();
       }
@@ -133,21 +131,21 @@ public class StatsPivotRecordBatch extends AbstractSingleRecordBatch<StatsPivot>
   }
 
   private void handleRemainder() {
-    int remainingRecordCount = incoming.getRecordCount() - remainderIndex;
+    int remainingRecordCount = incoming.getRecordCount() * statsPivotor.getRecordsPerRecord() - remainderIndex;
     doAlloc();
-    int projRecords = statsPivotor.pivotRecords(remainderIndex, remainingRecordCount, 0);
-    if (projRecords < remainingRecordCount) {
-      setValueCount(projRecords);
-      this.recordCount = projRecords;
-      remainderIndex += projRecords;
+    int outputRecords = statsPivotor.pivotRecords(remainderIndex, remainingRecordCount, 0);
+    if (outputRecords < remainingRecordCount * statsPivotor.getRecordsPerRecord()) {
+      setValueCount(outputRecords);
+      this.recordCount = outputRecords;
+      remainderIndex += outputRecords;
     } else {
-      setValueCount(remainingRecordCount);
+      setValueCount(outputRecords);
       hasRemainder = false;
       remainderIndex = 0;
       for(VectorWrapper<?> v: incoming) {
         v.clear();
       }
-      this.recordCount = remainingRecordCount;
+      this.recordCount = outputRecords;
     }
     // In case of complex writer expression, vectors would be added to batch run-time.
     // We have to re-build the schema.
@@ -215,117 +213,160 @@ public class StatsPivotRecordBatch extends AbstractSingleRecordBatch<StatsPivot>
     NameSegment ref = ex.getRef().getRootSegment();
     return ref.getPath().equals("*") && expr.getPath().equals("*");
   }
+  
+  private int lookupOrAddCol(String colName, MajorType colType, List<String> colNames, List<MajorType> colTypes) {
+    int rv = colNames.indexOf(colName);
+    if (rv == -1) {
+      rv = colNames.size();
+      colNames.add(colName);
+      colTypes.add(colType);
+    }
+    return rv;
+  }
 
+  private int lookupOrAddSubrec(String subrecName, List<String> subrecNames, List<Integer> subrecCounts) {
+    int rv = subrecNames.indexOf(subrecName);
+    if (rv == -1) {
+      rv = subrecNames.size();
+      subrecNames.add(subrecName);
+      subrecCounts.add(0);
+    }
+    subrecCounts.set(rv, subrecCounts.get(rv) + 1);
+    return rv;
+  }
+  
+  private MaterializedField addOutputCol(String name, MajorType type) {
+    MaterializedField field = MaterializedField.create(new FieldReference(name), type);
+    ValueVector vector = TypeHelper.getNewVector(field, oContext.getAllocator());
+    allocationVectors.add(vector);
+    container.add(vector);
+    return field;
+  }
+  
+  private void codegenAddExpression(ClassGenerator<StatsPivotor> cg, LogicalExpression expr, int subrecCount, int subrec) {
+    HoldingContainer hc = cg.addExpr(expr, false);
+    JBlock b = cg.getEvalBlock();
+    cg.unNestEvalBlock();
+    b._if(hc.getValue().eq(JExpr.lit(0)))._then()._return(JExpr.FALSE);
+    JBlock ifed = new JBlock(true, true);
+    ifed._if(JExpr.ref("outIndex").mod(JExpr.lit(subrecCount)).eq(JExpr.lit(subrec)))._then().add(b);
+    cg.nestEvalBlock(ifed);
+    cg.rotateBlock();
+  }
+  
+  private LogicalExpression makeInToOutExpression(int inIndex, MaterializedField outField) {
+    SchemaPath inPath = incoming.getSchema().getColumn(inIndex).getPath();
+    SchemaPath outPath = outField.getPath();
+    TypedFieldId outFid = container.getValueVectorId(outPath);
+    final ErrorCollector collector = new ErrorCollectorImpl();
+
+    ValueVectorWriteExpression write = new ValueVectorWriteExpression(
+        outFid,
+        ExpressionTreeMaterializer.materialize(
+            inPath, incoming, collector,
+            context.getFunctionRegistry(), true),
+        true);
+    
+    return write;
+  }
+  
+  private LogicalExpression makeColumnNameExpression(String colName, MaterializedField outField) {
+    SchemaPath outPath = outField.getPath();
+    TypedFieldId outFid = container.getValueVectorId(outPath);
+    final ErrorCollector collector = new ErrorCollectorImpl();
+
+    ValueVectorWriteExpression write = new ValueVectorWriteExpression(
+        outFid,
+        ExpressionTreeMaterializer.materialize(
+            ValueExpressions.getChar(colName), incoming, collector,
+            context.getFunctionRegistry(), true),
+        true);
+    
+    return write;
+  }
+  
   @Override
   protected void setupNewSchema() throws SchemaChangeException{
     this.allocationVectors = Lists.newArrayList();
     container.clear();
-    final List<NamedExpression> exprs = getExpressionList();
-    final ErrorCollector collector = new ErrorCollectorImpl();
     final List<TransferPair> transfers = Lists.newArrayList();
-
     final ClassGenerator<StatsPivotor> cg = CodeGenerator.getRoot(StatsPivotor.TEMPLATE_DEFINITION, context.getFunctionRegistry());
-
-    IntOpenHashSet transferFieldIds = new IntOpenHashSet();
-
-    boolean isAnyWildcard = isAnyWildcard(exprs);
-
-    if(isAnyWildcard){
-
-      // add this until we have sv2 project on wildcard working correctly.
-      if(incoming.getSchema().getSelectionVectorMode() != SelectionVectorMode.NONE){
-        throw new UnsupportedOperationException("Drill doesn't yet wildcard projects where there is a sv2, patch coming shortly.");
-      }
-      for(VectorWrapper<?> wrapper : incoming){
-        ValueVector vvIn = wrapper.getValueVector();
-
-        String name = vvIn.getField().getPath().getRootSegment().getPath();
-        FieldReference ref = new FieldReference(name);
-        TransferPair tp = wrapper.getValueVector().getTransferPair(ref);
-        transfers.add(tp);
-        container.add(tp.getTo());
-      }
-    }else{
-      final int inColCount = incoming.getSchema().getFieldCount();
-      Map<String, Integer> outCols = Maps.newHashMap();
-      int inToOut[] = new int[inColCount];
-      List<MaterializedField> outFields = Lists.newArrayList();
-      
-      for (int i = 0; i < inColCount; i++) {
-        MaterializedField inmf = incoming.getSchema().getColumn(i);
-        String [] ss = inmf.getLastName().split("_");
-        
-        String k = ss.length > 0 ? ss[ss.length - 1] : inmf.getLastName();
-        
-        if (!outCols.containsKey(k)) {
-          MaterializedField mf = MaterializedField.create(new FieldReference(k), inmf.getType());
-          ValueVector vector = TypeHelper.getNewVector(mf, oContext.getAllocator());
-          
-          outCols.put(k, outCols.size());
-          outFields.add(mf);
-          allocationVectors.add(vector);
-          container.add(vector);
-        }
-        
-        inToOut[i] = outCols.get(k);
-      }
-      
-      int outColCount = outFields.size();
-      int outWriters[] = new int[outColCount];
-      for (int i = 0; i < inColCount; i++) {
-        MaterializedField inmf = incoming.getSchema().getColumn(i);
-        SchemaPath outPath = outFields.get(inToOut[i]).getPath();
-        TypedFieldId fid = container.getValueVectorId(outPath);
-        
-        outWriters[inToOut[i]]++;
-        
-        ValueVectorWriteExpression write = new ValueVectorWriteExpression(fid, inmf.getPath(), true);
-        HoldingContainer hc = cg.addExpr(write);
-        
-        cg.getEvalBlock()._if(hc.getValue().eq(JExpr.lit(0)))._then()._return(JExpr.FALSE);
-        logger.debug("Added eval.");
-      }
-      
-      // fill in "missing" spots
+    final int inColCount = incoming.getSchema().getFieldCount();
+    
+    if(incoming.getSchema().getSelectionVectorMode() != SelectionVectorMode.NONE){
+      throw new UnsupportedOperationException("Don't use a selection vectory with StatsPivot. It barely works as is.");
     }
+    
+    List<String> colNames = Lists.newArrayList();
+    List<MajorType> colTypes = Lists.newArrayList();
+    
+    List<String> subrecNames = Lists.newArrayList();
+    List<Integer> subrecCounts = Lists.newArrayList();
+    
+    int outcol [] = new int[inColCount];
+    int subrec [] = new int[inColCount];
+    
+    // determine output destinations for each input column
+    for (int i = 0; i < inColCount; i++) {
+      MaterializedField inMf = incoming.getSchema().getColumn(i);
+      String [] ss = inMf.getLastName().split("_");
+      String oc = ss.length > 1 ? ss[ss.length - 1] : inMf.getLastName();
+      String sr = ss.length > 1 ? ss[0] : null;
+      
+      outcol[i] = lookupOrAddCol(oc, inMf.getType(), colNames, colTypes);
+      subrec[i] = sr != null ? lookupOrAddSubrec(sr, subrecNames, subrecCounts) : -1;
+    }
+    
+    for (int i = 0; i < inColCount; i++) {
+      System.out.println(incoming.getSchema().getColumn(i).getLastName() + " " + outcol[i] + " " + subrec[i]);
+    }
+    
+    // create output columns and fields
+    List<MaterializedField> outFields = Lists.newArrayList();
+    outFields.add(addOutputCol("pivotedfrom", Types.required(MinorType.VARCHAR)));
+    for (int i = 0; i < colNames.size(); i++) {
+      outFields.add(addOutputCol(colNames.get(i), colTypes.get(i)));
+    }
+    
+    // each subrec should have the same # of columns
+    if (Collections.min(subrecCounts) != Collections.max(subrecCounts)) {
+      throw new UnsupportedOperationException("Invalid set of input columns");
+    }
+    
+    // first column contains subrec names
+    for (int i = 0; i < subrecNames.size(); i++) {
+      codegenAddExpression(
+          cg, makeColumnNameExpression(subrecNames.get(i), outFields.get(0)),
+          subrecNames.size(), i);
+    }
+    
+    for (int i = 0; i < inColCount; i++) {
+      // an input column that is only written to one (outcol, subrec) coordinate
+      if (subrec[i] != -1) {
+        codegenAddExpression(
+            cg, makeInToOutExpression(i, outFields.get(outcol[i] + 1)),
+            subrecNames.size(), subrec[i]);
+        continue;
+      }
+      
+      // non-subrec associated input col writes itself to *all* subrecs.
+      for (int j = 0; j < subrecNames.size(); j++) {
+        codegenAddExpression(
+            cg, makeInToOutExpression(i, outFields.get(outcol[i] + 1)),
+            subrecNames.size(), j);
+      }
+    }
+    
     cg.rotateBlock();
     cg.getEvalBlock()._return(JExpr.TRUE);
 
     container.buildSchema(SelectionVectorMode.NONE);
-
+    
     try {
       this.statsPivotor = context.getImplementationClass(cg.getCodeGenerator());
-      statsPivotor.setup(context, incoming, this, transfers);
+      statsPivotor.setup(context, incoming, this, transfers, subrecNames.size());
     } catch (ClassTransformationException | IOException e) {
       throw new SchemaChangeException("Failure while attempting to load generated class", e);
     }
   }
-
-  private List<NamedExpression> getExpressionList() {
-    if (popConfig.getExprs() != null) {
-      return popConfig.getExprs();
-    }
-
-    List<NamedExpression> exprs = Lists.newArrayList();
-    for (MaterializedField field : incoming.getSchema()) {
-      if (Types.isComplex(field.getType()) || Types.isRepeated(field.getType())) {
-        LogicalExpression convertToJson = FunctionCallFactory.createConvert(ConvertExpression.CONVERT_TO, "JSON", field.getPath(), ExpressionPosition.UNKNOWN);
-        String castFuncName = CastFunctions.getCastFunc(MinorType.VARCHAR);
-        List<LogicalExpression> castArgs = Lists.newArrayList();
-        castArgs.add(convertToJson);  //input_expr
-        /*
-         * We are implicitly casting to VARCHAR so we don't have a max length,
-         * using an arbitrary value. We trim down the size of the stored bytes
-         * to the actual size so this size doesn't really matter.
-         */
-        castArgs.add(new ValueExpressions.LongExpression(65536, null)); //
-        FunctionCall castCall = new FunctionCall(castFuncName, castArgs, ExpressionPosition.UNKNOWN);
-        exprs.add(new NamedExpression(castCall, new FieldReference(field.getPath())));
-      } else {
-        exprs.add(new NamedExpression(field.getPath(), new FieldReference(field.getPath())));
-      }
-    }
-    return exprs;
-  }
-
 }

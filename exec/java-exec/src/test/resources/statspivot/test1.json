@@ -6,34 +6,94 @@
             type:"manual"
         }
     },
-	graph:[
+    graph:[
         {
-            @id:1,
-            pop:"mock-sub-scan",
-            url: "http://apache.org",
-            entries:[
-            	{records: 100, types: [
-            	  {name: "blue", type: "INT", mode: "REQUIRED"},
-            	  {name: "red", type: "BIGINT", mode: "OPTIONAL"},
-            	  {name: "green", type: "INT", mode: "REQUIRED"},
-            	  {name: "orange", type: "VARCHAR", mode: "OPTIONAL"}
-            	]}
+            "pop" : "fs-scan",
+            "@id" : 3,
+            "files" : [ "file:/Users/rbuchanan/test.json" ],
+            "storage" : {
+                "type" : "file",
+                "enabled" : true,
+                "connection" : "file:///",
+                "workspaces" : {
+                    "root" : {
+                        "location" : "/",
+                        "writable" : false,
+                        "storageformat" : null
+                    },
+                    "home" : {
+                        "location" : "/Users/rbuchanan",
+                        "writable" : false,
+                        "storageformat" : null
+                    },
+                    "tmp" : {
+                        "location" : "/tmp",
+                        "writable" : true,
+                        "storageformat" : "json"
+                    }
+                },
+                "formats" : {
+                    "psv" : {
+                        "type" : "text",
+                        "extensions" : [ "tbl" ],
+                        "delimiter" : "|"
+                    },
+                    "csv" : {
+                        "type" : "text",
+                        "extensions" : [ "csv" ],
+                        "delimiter" : ","
+                    },
+                    "tsv" : {
+                        "type" : "text",
+                        "extensions" : [ "tsv" ],
+                        "delimiter" : "\t"
+                    },
+                    "parquet" : {
+                        "type" : "parquet"
+                    },
+                    "json" : {
+                        "type" : "json"
+                    }
+                }
+            },
+            "format" : {
+                "type" : "json"
+            },
+            "selectionRoot" : "/Users/rbuchanan/test.json",
+            "cost" : 22.0
+        }, {
+            "pop" : "statistics-aggregate",
+            "@id" : 2,
+            "child" : 3,
+            "cardinality" : 1.0,
+            "initialAllocation" : 1000000,
+            "maxAllocation" : 10000000000,
+            "cost" : 12.5,
+            "funcs" : [
+                "count",
+                "min",
+                "max",
+                "sum",
+                "avg"
             ]
-        },
-        {
-            @id:2,
+        }, {
+            
+            "pop" : "stats-pivot",
+            "@id" : 1,
+            "child" : 2,
+            "exprs" : [ {
+                "ref" : "`k`",
+                "expr" : "`k`"
+            }, {
+                "ref" : "`a`",
+                "expr" : "`a` * 2"
+            } ],
+            "initialAllocation" : 1000000,
+            "maxAllocation" : 10000000000,
+            "cost" : 22.0
+        }, {
+            @id: 0,
             child: 1,
-            pop:"project",
-            exprs: [
-              { ref: "col1", expr:"red + 1" },
-              { ref: "col2", expr:"red + 2" },
-              { ref: "col3", expr:"orange"},
-              { ref: "col4", expr:"orange"}
-            ]
-        },
-        {
-            @id: 3,
-            child: 2,
             pop: "screen"
         }
     ]

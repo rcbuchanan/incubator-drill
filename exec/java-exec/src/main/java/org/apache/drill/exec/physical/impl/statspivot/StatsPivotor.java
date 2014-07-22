@@ -27,7 +27,8 @@ import org.apache.drill.exec.record.TransferPair;
 
 public interface StatsPivotor {
 
-  public abstract void setup(FragmentContext context, RecordBatch incoming,  RecordBatch outgoing, List<TransferPair> transfers)  throws SchemaChangeException;
+  public abstract int getRecordsPerRecord();
+  public abstract void setup(FragmentContext context, RecordBatch incoming,  RecordBatch outgoing, List<TransferPair> transfers, int recordsPerRecord)  throws SchemaChangeException;
   public abstract int pivotRecords(int startIndex, int recordCount, int firstOutputIndex);
 
   public static TemplateClassDefinition<StatsPivotor> TEMPLATE_DEFINITION = new TemplateClassDefinition<StatsPivotor>(StatsPivotor.class, StatsPivotTemplate.class);

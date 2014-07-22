@@ -38,10 +38,16 @@ public abstract class StatsPivotTemplate implements StatsPivotor {
   private SelectionVector2 vector2;
   private SelectionVector4 vector4;
   private SelectionVectorMode svMode;
+  private int recordsPerRecord;
 
   public StatsPivotTemplate() throws SchemaChangeException{
   }
 
+  @Override
+  public final int getRecordsPerRecord() {
+    return recordsPerRecord;
+  }
+  
   @Override
   public final int pivotRecords(int startIndex, final int recordCount, int firstOutputIndex) {
     switch(svMode){
@@ -52,31 +58,30 @@ public abstract class StatsPivotTemplate implements StatsPivotor {
     case TWO_BYTE:
       final int count = recordCount;
       for(int i = 0; i < count; i++, firstOutputIndex++){
-        if (!doEval(vector2.getIndex(i), firstOutputIndex))
-          return i;
+        for (int j = 0; j < recordsPerRecord; j++, firstOutputIndex++) {
+          if (!doEval(vector2.getIndex(i), firstOutputIndex))
+            return i * recordsPerRecord + j;
+        }
       }
-      return recordCount;
+      return recordCount * recordsPerRecord;
 
 
     case NONE:
 
       final int countN = recordCount;
+      System.out.println("records to output " + countN);
       int i;
-      for (i = startIndex; i < startIndex + countN; i++, firstOutputIndex++) {
-        if (!doEval(i, firstOutputIndex)) {
-          break;
+      for (i = startIndex; i < startIndex + countN; i++) {
+        for (int j = 0; j < recordsPerRecord; j++, firstOutputIndex++) {
+          System.out.println("src " + i + " dst " + firstOutputIndex);
+          if (!doEval(i, firstOutputIndex)) {
+            break;
+            // return i * recordsPerRecord + j; 
+          }
         }
       }
-      if (i < startIndex + recordCount || startIndex > 0) {
-        for(TransferPair t : transfers){
-          t.splitAndTransfer(startIndex, i - startIndex);
-        }
-        return i - startIndex;
-      }
-      for(TransferPair t : transfers){
-          t.transfer();
-      }
-      return recordCount;
+      
+      return recordCount * recordsPerRecord;
 
 
 
@@ -86,8 +91,8 @@ public abstract class StatsPivotTemplate implements StatsPivotor {
   }
 
   @Override
-  public final void setup(FragmentContext context, RecordBatch incoming, RecordBatch outgoing, List<TransferPair> transfers)  throws SchemaChangeException{
-
+  public final void setup(FragmentContext context, RecordBatch incoming, RecordBatch outgoing, List<TransferPair> transfers, int recordsPerRecord)  throws SchemaChangeException{
+    this.recordsPerRecord = recordsPerRecord;
     this.svMode = incoming.getSchema().getSelectionVectorMode();
     switch(svMode){
     case FOUR_BYTE:

@@ -19,9 +19,13 @@ package org.apache.drill.exec.physical.impl.pivotstats;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+
+import java.util.List;
+
 import mockit.Injectable;
 import mockit.NonStrictExpectations;
 
+import org.apache.drill.BaseTestQuery;
 import org.apache.drill.common.config.DrillConfig;
 import org.apache.drill.common.expression.ExpressionPosition;
 import org.apache.drill.common.expression.SchemaPath;
@@ -35,12 +39,18 @@ import org.apache.drill.exec.physical.PhysicalPlan;
 import org.apache.drill.exec.physical.base.FragmentRoot;
 import org.apache.drill.exec.physical.impl.OperatorCreatorRegistry;
 import org.apache.drill.exec.physical.impl.ImplCreator;
+import org.apache.drill.exec.physical.impl.RootExec;
 import org.apache.drill.exec.physical.impl.SimpleRootExec;
 import org.apache.drill.exec.planner.PhysicalPlanReader;
 import org.apache.drill.exec.proto.CoordinationProtos;
 import org.apache.drill.exec.proto.BitControl.PlanFragment;
 import org.apache.drill.exec.proto.ExecProtos.FragmentHandle;
 import org.apache.drill.exec.record.BatchSchema;
+import org.apache.drill.exec.record.RecordBatch;
+import org.apache.drill.exec.record.RecordBatchLoader;
+import org.apache.drill.exec.record.BatchSchema.SelectionVectorMode;
+import org.apache.drill.exec.record.VectorWrapper;
+import org.apache.drill.exec.rpc.user.QueryResultBatch;
 import org.apache.drill.exec.rpc.user.UserServer.UserClientConnection;
 import org.apache.drill.exec.server.DrillbitContext;
 import org.apache.drill.exec.util.VectorUtil;
@@ -54,53 +64,16 @@ import com.google.common.base.Charsets;
 import com.google.common.io.Files;
 import com.codahale.metrics.MetricRegistry;
 
-public class TestSimplePivot extends ExecTest {
+public class TestSimplePivot extends BaseTestQuery {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(TestSimplePivot.class);
   DrillConfig c = DrillConfig.create();
 
 
   @Test
   public void pivot(@Injectable final DrillbitContext bitContext, @Injectable UserClientConnection connection) throws Throwable{
+    List<QueryResultBatch> results = testPhysicalWithResults(Files.toString(FileUtils.getResourceAsFile("/statspivot/test1.json"), Charsets.UTF_8));
+    //RecordBatchLoader loader = new RecordBatchLoader(getAllocator());
+    printResult(results);
 
-
-    new NonStrictExpectations(){{
-      bitContext.getMetrics(); result = new MetricRegistry();
-      bitContext.getAllocator(); result = new TopLevelAllocator();
-      bitContext.getOperatorCreatorRegistry(); result = new OperatorCreatorRegistry(c);
-    }};
-
-
-    PhysicalPlanReader reader = new PhysicalPlanReader(c, c.getMapper(), CoordinationProtos.DrillbitEndpoint.getDefaultInstance());
-    PhysicalPlan plan = reader.readPhysicalPlan(Files.toString(FileUtils.getResourceAsFile("/statspivot/test1.json"), Charsets.UTF_8));
-    FunctionImplementationRegistry registry = new FunctionImplementationRegistry(c);
-    FragmentContext context = new FragmentContext(bitContext, PlanFragment.getDefaultInstance(), connection, registry);
-    SimpleRootExec exec = new SimpleRootExec(ImplCreator.getExec(context, (FragmentRoot) plan.getSortedOperators(false).iterator().next()));
-
-//    while(exec.next()){
-//      VectorUtil.showVectorAccessibleContent(exec.getIncoming(), "\t");
-//      NullableBigIntVector c1 = exec.getValueVectorById(new SchemaPath("col1", ExpressionPosition.UNKNOWN), NullableBigIntVector.class);
-//      NullableBigIntVector c2 = exec.getValueVectorById(new SchemaPath("col2", ExpressionPosition.UNKNOWN), NullableBigIntVector.class);
-//      int x = 0;
-//      NullableBigIntVector.Accessor a1, a2;
-//      a1 = c1.getAccessor();
-//      a2 = c2.getAccessor();
-//
-//      for (int i = 0; i < a1.getValueCount(); i++){
-//        if (!a1.isNull(i)) assertEquals(a1.get(i)+1, a2.get(i));
-//        x += a1.isNull(i) ? 0 : a1.get(i);
-//      }
-//    }
-    
-    exec.next();
-    BatchSchema incoming = exec.getIncoming().getSchema();
-    for (int i = 0; i < incoming.getFieldCount(); i++) {
-      System.out.println(incoming.getColumn(i).getLastName() + " : " + incoming.getColumn(i).getType().toString());
-    }
-
-//    if(context.getFailureCause() != null){
-//      throw context.getFailureCause();
-//    }
-    assertTrue(!context.isFailed());
   }
-
 }

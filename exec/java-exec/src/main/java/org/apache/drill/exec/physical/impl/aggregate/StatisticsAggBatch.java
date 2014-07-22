@@ -206,7 +206,7 @@ public class StatisticsAggBatch extends AbstractRecordBatch<StatisticsAggregate>
         if(expr == null) continue;
         
         final MaterializedField outputField = MaterializedField.create(
-            funcs[i] + "_" + incoming.getSchema().getColumn(j).getLastName(),
+            incoming.getSchema().getColumn(j).getLastName() + "_" + funcs[i],
             expr.getMajorType());
         ValueVector vector = TypeHelper.getNewVector(outputField, oContext.getAllocator());
         TypedFieldId id = container.add(vector);
