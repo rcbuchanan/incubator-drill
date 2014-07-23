@@ -71,10 +71,7 @@
             "cost" : 12.5,
             "funcs" : [
                 "count",
-                "min",
-                "max",
-                "sum",
-                "avg"
+                "hll"
             ]
         }, {
             

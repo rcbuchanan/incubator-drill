@@ -26,6 +26,7 @@ import org.apache.drill.common.expression.ExpressionPosition;
 import org.apache.drill.common.expression.FunctionCall;
 import org.apache.drill.common.expression.FunctionCallFactory;
 import org.apache.drill.common.expression.LogicalExpression;
+import org.apache.drill.common.expression.NullExpression;
 import org.apache.drill.common.expression.ValueExpressions;
 import org.apache.drill.common.logical.data.NamedExpression;
 import org.apache.drill.exec.compile.sig.GeneratorMapping;
@@ -45,7 +46,7 @@ import org.apache.drill.exec.memory.BufferAllocator;
 import org.apache.drill.exec.memory.OutOfMemoryException;
 import org.apache.drill.exec.ops.FragmentContext;
 import org.apache.drill.exec.physical.config.StatisticsAggregate;
-import org.apache.drill.exec.physical.impl.aggregate.StatisticsAggregator.AggOutcome;
+import org.apache.drill.exec.physical.config.StreamingAggregate;
 import org.apache.drill.exec.record.AbstractRecordBatch;
 import org.apache.drill.exec.record.BatchSchema;
 import org.apache.drill.exec.record.BatchSchema.SelectionVectorMode;
@@ -62,120 +63,17 @@ import com.google.common.collect.Lists;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JVar;
 
-public class StatisticsAggBatch extends AbstractRecordBatch<StatisticsAggregate> {
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StatisticsAggBatch.class);
-
-  private StatisticsAggregator aggregator;
-  private final RecordBatch incoming;
-  private boolean done = false;
-  private boolean first = true;
-  
-  private final String funcs[];
-
+public class StatisticsAggBatch extends StreamingAggBatch {
+  private String[] funcs;
   private int schemaId;
 
   public StatisticsAggBatch(StatisticsAggregate popConfig, RecordBatch incoming, FragmentContext context) throws OutOfMemoryException {
-    super(popConfig, context);
-    this.incoming = incoming;
+    super(popConfig, incoming, context);
     this.funcs = popConfig.getFuncs();
   }
 
-  @Override
-  public int getRecordCount() {
-    if(done) return 0;
-    if (aggregator == null) return 0;
-    return aggregator.getOutputCount();
-  }
-
-  @Override
-  public IterOutcome innerNext() {
-    if (done) {
-      container.zeroVectors();
-      return IterOutcome.NONE;
-    }
-      // this is only called on the first batch. Beyond this, the aggregator manages batches.
-    if (aggregator == null) {
-      IterOutcome outcome = next(incoming);
-      logger.debug("Next outcome of {}", outcome);
-      switch (outcome) {
-      case NONE:
-      case NOT_YET:
-      case STOP:
-        return outcome;
-      case OK_NEW_SCHEMA:
-        if (!createAggregator()){
-          done = true;
-          return IterOutcome.STOP;
-        }
-        break;
-      case OK:
-        throw new IllegalStateException("You should never get a first batch without a new schema");
-      default:
-        throw new IllegalStateException(String.format("unknown outcome %s", outcome));
-      }
-    }
-
-    while(true){
-      AggOutcome out = aggregator.doWork();
-      logger.debug("Aggregator response {}, records {}", out, aggregator.getOutputCount());
-      switch(out){
-      case CLEANUP_AND_RETURN:
-        if (!first) container.zeroVectors();
-        done = true;
-        // fall through
-      case RETURN_OUTCOME:
-        IterOutcome outcome = aggregator.getOutcome();
-        if (outcome == IterOutcome.NONE && first) {
-          first = false;
-          done = true;
-          return IterOutcome.OK_NEW_SCHEMA;
-        } else if (outcome == IterOutcome.OK && first) {
-          outcome = IterOutcome.OK_NEW_SCHEMA;
-        }
-        first = false;
-        return outcome;
-      case UPDATE_AGGREGATOR:
-        first = false;
-        aggregator = null;
-        if(!createAggregator()){
-          return IterOutcome.STOP;
-      }
-      continue;
-      default:
-        throw new IllegalStateException(String.format("Unknown state %s.", out));
-      }
-    }
-  }
-
-
-
-  /**
-   * Creates a new Aggregator based on the current schema. If setup fails, this method is responsible for cleaning up
-   * and informing the context of the failure state, as well is informing the upstream operators.
-   *
-   * @return true if the aggregator was setup successfully. false if there was a failure.
-   */
-  private boolean createAggregator() {
-    logger.debug("Creating new aggregator.");
-    try{
-      stats.startSetup();
-      this.aggregator = createAggregatorInternal();
-      return true;
-    }catch(SchemaChangeException | ClassTransformationException | IOException ex){
-      context.fail(ex);
-      container.clear();
-      incoming.kill();
-      return false;
-    }finally{
-      stats.stopSetup();
-    }
-  }
-
-
-
-
-  private StatisticsAggregator createAggregatorInternal() throws SchemaChangeException, ClassTransformationException, IOException{
-    ClassGenerator<StatisticsAggregator> cg = CodeGenerator.getRoot(StatisticsAggTemplate.TEMPLATE_DEFINITION, context.getFunctionRegistry());
+  protected StreamingAggregator createAggregatorInternal() throws SchemaChangeException, ClassTransformationException, IOException{
+    ClassGenerator<StreamingAggregator> cg = CodeGenerator.getRoot(StreamingAggTemplate.TEMPLATE_DEFINITION, context.getFunctionRegistry());
     container.clear();
 
     LogicalExpression[] keyExprs = new LogicalExpression[1];
@@ -200,10 +98,12 @@ public class StatisticsAggBatch extends AbstractRecordBatch<StatisticsAggregate>
         args.add(incoming.getSchema().getColumn(j).getPath());
         int fieldno = i * incoming.getSchema().getFieldCount() + j;
         
-        final LogicalExpression expr = ExpressionTreeMaterializer.materialize(
+        LogicalExpression expr = ExpressionTreeMaterializer.materialize(
             FunctionCallFactory.createExpression(funcs[i], args),
             incoming, collector, context.getFunctionRegistry());
-        if(expr == null) continue;
+        if(expr == null) {
+          expr = new NullExpression();
+        }
         
         final MaterializedField outputField = MaterializedField.create(
             incoming.getSchema().getColumn(j).getLastName() + "_" + funcs[i],
@@ -227,136 +127,8 @@ public class StatisticsAggBatch extends AbstractRecordBatch<StatisticsAggregate>
     getIndex(cg);
 
     container.buildSchema(SelectionVectorMode.NONE);
-    StatisticsAggregator agg = context.getImplementationClass(cg);
+    StreamingAggregator agg = context.getImplementationClass(cg);
     agg.setup(context, incoming, this);
     return agg;
   }
-
-
-
-  private final GeneratorMapping IS_SAME = GeneratorMapping.create("setupInterior", "isSame", null, null);
-  private final MappingSet IS_SAME_I1 = new MappingSet("index1", null, IS_SAME, IS_SAME);
-  private final MappingSet IS_SAME_I2 = new MappingSet("index2", null, IS_SAME, IS_SAME);
-
-  private void setupIsSame(ClassGenerator<StatisticsAggregator> cg, LogicalExpression[] keyExprs){
-    cg.setMappingSet(IS_SAME_I1);
-    for(LogicalExpression expr : keyExprs){
-      // first, we rewrite the evaluation stack for each side of the comparison.
-      cg.setMappingSet(IS_SAME_I1);
-      HoldingContainer first = cg.addExpr(expr, false);
-      cg.setMappingSet(IS_SAME_I2);
-      HoldingContainer second = cg.addExpr(expr, false);
-
-      LogicalExpression fh = FunctionGenerationHelper.getComparator(first, second, context.getFunctionRegistry());
-      HoldingContainer out = cg.addExpr(fh, false);
-      cg.getEvalBlock()._if(out.getValue().ne(JExpr.lit(0)))._then()._return(JExpr.FALSE);
-    }
-    cg.getEvalBlock()._return(JExpr.TRUE);
-  }
-
-  private final GeneratorMapping IS_SAME_PREV_INTERNAL_BATCH_READ = GeneratorMapping.create("isSamePrev", "isSamePrev", null, null); // the internal batch changes each time so we need to redo setup.
-  private final GeneratorMapping IS_SAME_PREV = GeneratorMapping.create("setupInterior", "isSamePrev", null, null);
-  private final MappingSet ISA_B1 = new MappingSet("b1Index", null, "b1", null, IS_SAME_PREV_INTERNAL_BATCH_READ, IS_SAME_PREV_INTERNAL_BATCH_READ);
-  private final MappingSet ISA_B2 = new MappingSet("b2Index", null, "incoming", null, IS_SAME_PREV, IS_SAME_PREV);
-
-  private void setupIsSameApart(ClassGenerator<StatisticsAggregator> cg, LogicalExpression[] keyExprs){
-    cg.setMappingSet(ISA_B1);
-    for(LogicalExpression expr : keyExprs){
-      // first, we rewrite the evaluation stack for each side of the comparison.
-      cg.setMappingSet(ISA_B1);
-      HoldingContainer first = cg.addExpr(expr, false);
-      cg.setMappingSet(ISA_B2);
-      HoldingContainer second = cg.addExpr(expr, false);
-
-      LogicalExpression fh = FunctionGenerationHelper.getComparator(first, second, context.getFunctionRegistry());
-      HoldingContainer out = cg.addExpr(fh, false);
-      cg.getEvalBlock()._if(out.getValue().ne(JExpr.lit(0)))._then()._return(JExpr.FALSE);
-    }
-    cg.getEvalBlock()._return(JExpr.TRUE);
-  }
-
-  private final GeneratorMapping EVAL_INSIDE = GeneratorMapping.create("setupInterior", "addRecord", null, null);
-  private final GeneratorMapping EVAL_OUTSIDE = GeneratorMapping.create("setupInterior", "outputRecordValues", "resetValues", "cleanup");
-  private final MappingSet EVAL = new MappingSet("index", "outIndex", "incoming", "outgoing", EVAL_INSIDE, EVAL_OUTSIDE, EVAL_INSIDE);
-
-  private void addRecordValues(ClassGenerator<StatisticsAggregator> cg, LogicalExpression[] valueExprs){
-    cg.setMappingSet(EVAL);
-    for(LogicalExpression ex : valueExprs){
-      HoldingContainer hc = cg.addExpr(ex);
-      cg.getBlock(BlockType.EVAL)._if(hc.getValue().eq(JExpr.lit(0)))._then()._return(JExpr.FALSE);
-    }
-    cg.getBlock(BlockType.EVAL)._return(JExpr.TRUE);
-  }
-
-  private final MappingSet RECORD_KEYS = new MappingSet(GeneratorMapping.create("setupInterior", "outputRecordKeys", null, null));
-
-  private void outputRecordKeys(ClassGenerator<StatisticsAggregator> cg, TypedFieldId[] keyOutputIds, LogicalExpression[] keyExprs){
-    cg.setMappingSet(RECORD_KEYS);
-    for(int i =0; i < keyExprs.length; i++){
-      HoldingContainer hc = cg.addExpr(new ValueVectorWriteExpression(keyOutputIds[i], keyExprs[i], true));
-      cg.getBlock(BlockType.EVAL)._if(hc.getValue().eq(JExpr.lit(0)))._then()._return(JExpr.FALSE);
-    }
-    cg.getBlock(BlockType.EVAL)._return(JExpr.TRUE);
-  }
-
-  private final GeneratorMapping PREVIOUS_KEYS_OUT = GeneratorMapping.create("setupInterior", "outputRecordKeysPrev", null, null);
-  private final MappingSet RECORD_KEYS_PREV_OUT = new MappingSet("previousIndex", "outIndex", "previous", "outgoing", PREVIOUS_KEYS_OUT, PREVIOUS_KEYS_OUT);
-
-  private final GeneratorMapping PREVIOUS_KEYS = GeneratorMapping.create("outputRecordKeysPrev", "outputRecordKeysPrev", null, null);
-  private final MappingSet RECORD_KEYS_PREV = new MappingSet("previousIndex", "outIndex", "previous", null, PREVIOUS_KEYS, PREVIOUS_KEYS);
-
-  private void outputRecordKeysPrev(ClassGenerator<StatisticsAggregator> cg, TypedFieldId[] keyOutputIds, LogicalExpression[] keyExprs){
-    cg.setMappingSet(RECORD_KEYS_PREV);
-
-    for(int i =0; i < keyExprs.length; i++){
-      // IMPORTANT: there is an implicit assertion here that the TypedFieldIds for the previous batch and the current batch are the same.  This is possible because InternalBatch guarantees this.
-      logger.debug("Writing out expr {}", keyExprs[i]);
-      cg.rotateBlock();
-      cg.setMappingSet(RECORD_KEYS_PREV);
-      HoldingContainer innerExpression = cg.addExpr(keyExprs[i], false);
-      cg.setMappingSet(RECORD_KEYS_PREV_OUT);
-      HoldingContainer outerExpression = cg.addExpr(new ValueVectorWriteExpression(keyOutputIds[i], new HoldingContainerExpression(innerExpression), true), false);
-      cg.getBlock(BlockType.EVAL)._if(outerExpression.getValue().eq(JExpr.lit(0)))._then()._return(JExpr.FALSE);
-
-    }
-    cg.getBlock(BlockType.EVAL)._return(JExpr.TRUE);
-  }
-
-  private void getIndex(ClassGenerator<StatisticsAggregator> g){
-    switch(incoming.getSchema().getSelectionVectorMode()){
-    case FOUR_BYTE: {
-      JVar var = g.declareClassField("sv4_", g.getModel()._ref(SelectionVector4.class));
-      g.getBlock("setupInterior").assign(var, JExpr.direct("incoming").invoke("getSelectionVector4"));
-      g.getBlock("getVectorIndex")._return(var.invoke("get").arg(JExpr.direct("recordIndex")));;
-      return;
-    }
-    case NONE: {
-      g.getBlock("getVectorIndex")._return(JExpr.direct("recordIndex"));;
-      return;
-    }
-    case TWO_BYTE: {
-      JVar var = g.declareClassField("sv2_", g.getModel()._ref(SelectionVector2.class));
-      g.getBlock("setupInterior").assign(var, JExpr.direct("incoming").invoke("getSelectionVector2"));
-      g.getBlock("getVectorIndex")._return(var.invoke("getIndex").arg(JExpr.direct("recordIndex")));;
-      return;
-    }
-
-    default:
-      throw new IllegalStateException();
-
-    }
-
-  }
-
-  @Override
-  public void cleanup() {
-    super.cleanup();
-    incoming.cleanup();
-  }
-
-  @Override
-  protected void killIncoming() {
-    incoming.kill();
-  }
-
 }

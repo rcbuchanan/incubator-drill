@@ -28,7 +28,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
 
 @JsonTypeName("statistics-aggregate")
-public class StatisticsAggregate extends AbstractSingle {
+public class StatisticsAggregate extends StreamingAggregate {
 
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StatisticsAggregate.class);
   private final String[] funcs;
@@ -37,7 +37,7 @@ public class StatisticsAggregate extends AbstractSingle {
 
   @JsonCreator
   public StatisticsAggregate(@JsonProperty("child") PhysicalOperator child, @JsonProperty("funcs") String[] funcs, @JsonProperty("cardinality") float cardinality) {
-    super(child);
+    super(child, null, null, 0.f);
     this.funcs = funcs;
     this.cardinality = cardinality;
   }
@@ -58,7 +58,7 @@ public class StatisticsAggregate extends AbstractSingle {
 
   @Override
   public int getOperatorType() {
-    return CoreOperatorType.STREAMING_AGGREGATE_VALUE;
+    return CoreOperatorType.STATISTICS_AGGREGATE_VALUE;
   }
 
 }
