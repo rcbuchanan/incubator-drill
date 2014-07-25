@@ -309,9 +309,9 @@ public class StatsPivotRecordBatch extends AbstractSingleRecordBatch<StatsPivot>
     // determine output destinations for each input column
     for (int i = 0; i < inColCount; i++) {
       MaterializedField inMf = incoming.getSchema().getColumn(i);
-      String [] ss = inMf.getLastName().split("_");
-      String oc = ss.length > 1 ? ss[ss.length - 1] : inMf.getLastName();
-      String sr = ss.length > 1 ? ss[0] : null;
+      String [] ss = inMf.getLastName().split("_", 2);
+      String oc = ss.length > 1 ? ss[0] : inMf.getLastName();
+      String sr = ss.length > 1 ? ss[ss.length - 1] : null;
       
       outcol[i] = lookupOrAddCol(oc, inMf.getType(), colNames, colTypes);
       subrec[i] = sr != null ? lookupOrAddSubrec(sr, subrecNames, subrecCounts) : -1;

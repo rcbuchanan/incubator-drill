@@ -23,6 +23,7 @@ import net.hydromatic.optiq.tools.Planner;
 
 import org.apache.drill.exec.ops.QueryContext;
 import org.apache.drill.exec.planner.sql.handlers.AbstractSqlHandler;
+import org.apache.drill.exec.planner.sql.handlers.AnalyzeTableHandler;
 import org.apache.drill.exec.planner.sql.handlers.CreateTableHandler;
 import org.apache.drill.exec.planner.sql.handlers.DefaultSqlHandler;
 import org.eigenbase.sql.SqlCall;
@@ -99,7 +100,7 @@ public class SqlAnalyzeTable extends DrillSqlCall {
 
   @Override
   public AbstractSqlHandler getSqlHandler(Planner planner, QueryContext context) {
-    return new DefaultSqlHandler(planner, context);
+    return new AnalyzeTableHandler(planner, context);
   }
 
   public List<String> getSchemaPath() {
@@ -110,11 +111,8 @@ public class SqlAnalyzeTable extends DrillSqlCall {
     return tblName.names.subList(0, tblName.names.size() - 1);
   }
 
-  public String getName() {
-    if (tblName.isSimple())
-      return tblName.getSimple();
-
-    return tblName.names.get(tblName.names.size() - 1);
+  public SqlIdentifier getTableIdentifier() {
+    return tblName;
   }
 
   public List<String> getFieldNames() {

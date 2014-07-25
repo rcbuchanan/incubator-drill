@@ -106,7 +106,7 @@ public class StatisticsAggBatch extends StreamingAggBatch {
         }
         
         final MaterializedField outputField = MaterializedField.create(
-            incoming.getSchema().getColumn(j).getLastName() + "_" + funcs[i],
+            funcs[i] + "_" + incoming.getSchema().getColumn(j).getLastName(),
             expr.getMajorType());
         ValueVector vector = TypeHelper.getNewVector(outputField, oContext.getAllocator());
         TypedFieldId id = container.add(vector);
