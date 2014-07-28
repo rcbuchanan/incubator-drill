@@ -167,6 +167,12 @@ public class ProfileResources {
     ProfileWrapper wrapper = new ProfileWrapper(getQueryProfile(queryId));
 
     return new Viewable("/rest/profile/profile.ftl", wrapper);
-
+  }
+  
+  @GET
+  @Path("/tools/profiles/{queryid}")
+  @Produces(MediaType.TEXT_HTML)
+  public Viewable getProfileTools(@PathParam("queryid") String queryId) {
+    return new Viewable("/rest/profile/tools.ftl", queryId);
   }
 }
