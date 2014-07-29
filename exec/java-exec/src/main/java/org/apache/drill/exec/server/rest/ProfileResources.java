@@ -35,7 +35,6 @@ import javax.xml.bind.annotation.XmlRootElement;
 
 import org.apache.drill.exec.proto.UserBitShared.QueryProfile;
 import org.apache.drill.exec.proto.UserBitShared.QueryResult.QueryState;
-import org.apache.drill.exec.proto.beans.CoreOperatorType;
 import org.apache.drill.exec.store.sys.PStore;
 import org.apache.drill.exec.work.WorkManager;
 import org.apache.drill.exec.work.foreman.QueryStatus;
@@ -55,12 +54,10 @@ public class ProfileResources {
     private String queryId;
     private Date time;
     private String location;
-    private String query;
 
-    public ProfileInfo(String queryId, long time, String query) {
+    public ProfileInfo(String queryId, long time) {
       this.queryId = queryId;
       this.time = new Date(time);
-      this.query = query;
       this.location = "http://localhost:8047/profile/" + queryId + ".json";
     }
 
@@ -74,10 +71,6 @@ public class ProfileResources {
 
     public String getLocation() {
       return location;
-    }
-    
-    public String getQuery() {
-      return query;
     }
 
     @Override
@@ -123,9 +116,9 @@ public class ProfileResources {
     for(Map.Entry<String, QueryProfile> entry : store){
       QueryProfile profile = entry.getValue();
       if (profile.getState() == QueryState.RUNNING || profile.getState() == QueryState.PENDING) {
-        runningQueries.add(new ProfileInfo(entry.getKey(), profile.getStart(), profile.getQuery()));
+        runningQueries.add(new ProfileInfo(entry.getKey(), profile.getStart()));
       } else {
-        finishedQueries.add(new ProfileInfo(entry.getKey(), profile.getStart(), profile.getQuery()));
+        finishedQueries.add(new ProfileInfo(entry.getKey(), profile.getStart()));
       }
     }
 
@@ -174,12 +167,6 @@ public class ProfileResources {
     ProfileWrapper wrapper = new ProfileWrapper(getQueryProfile(queryId));
 
     return new Viewable("/rest/profile/profile.ftl", wrapper);
-  }
-  
-  @GET
-  @Path("/tools/profiles/{queryid}")
-  @Produces(MediaType.TEXT_HTML)
-  public Viewable getProfileTools(@PathParam("queryid") String queryId) {
-    return new Viewable("/rest/profile/tools.ftl", queryId);
+
   }
 }
