@@ -13,7 +13,7 @@
 <#macro page_head>
 <script src="http://d3js.org/d3.v3.js"></script>
 <script src="http://cpettitt.github.io/project/dagre-d3/latest/dagre-d3.js"></script>
-<script src="/www/tools.js"></script>
+<script src="/www/graph.js"></script>
 <script>
     var globalconfig = {
         "queryid" : "${model.getQueryId()}",
