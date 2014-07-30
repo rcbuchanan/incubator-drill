@@ -25,6 +25,7 @@ import net.hydromatic.optiq.tools.ValidationException;
 import org.apache.drill.exec.ops.QueryContext;
 import org.apache.drill.exec.physical.PhysicalPlan;
 import org.apache.drill.exec.physical.base.PhysicalOperator;
+import org.apache.drill.exec.planner.logical.DrillAnalyzeRel;
 import org.apache.drill.exec.planner.logical.DrillRel;
 import org.apache.drill.exec.planner.logical.DrillScreenRel;
 import org.apache.drill.exec.planner.logical.DrillStoreRel;
@@ -63,12 +64,11 @@ public class AnalyzeTableHandler extends DefaultSqlHandler {
     
     SqlIdentifier tableIdentifier = sqlAnalyzeTable.getTableIdentifier();
     SqlNodeList allNodes = new SqlNodeList(SqlParserPos.ZERO);
-    allNodes.add(SqlSelectKeyword.ALL.symbol(SqlParserPos.ZERO));
-    SqlSelectKeyword.ALL.toString();
+    allNodes.add(new SqlIdentifier("*", SqlParserPos.ZERO));
     SqlSelect sqlSelect = new SqlSelect(
         SqlParserPos.ZERO, /* position */
         SqlNodeList.EMPTY, /* keyword list */
-        SqlNodeList.EMPTY, /*select list */
+        allNodes, /*select list */
         tableIdentifier, /* from */
         null, /* where */
         null, /* group by */
@@ -76,7 +76,7 @@ public class AnalyzeTableHandler extends DefaultSqlHandler {
         null, /* windowDecls */
         null, /* orderBy */
         null, /* offset */
-        null /* fetch */); 
+        null /* fetch */);
 
     SqlNode rewrittenSelect = rewrite(sqlSelect);
     SqlNode validated = validateNode(rewrittenSelect);
@@ -85,6 +85,8 @@ public class AnalyzeTableHandler extends DefaultSqlHandler {
     // Convert the query to Drill Logical plan and insert a writer operator on top.
     DrillRel drel = convertToDrel(relQuery);
     log("Drill Logical", drel);
+    
+    
     Prel prel = convertToPrel(drel);
     log("Drill Physical", prel);
     PhysicalOperator pop = convertToPop(prel);
@@ -94,15 +96,17 @@ public class AnalyzeTableHandler extends DefaultSqlHandler {
     return plan;
   }
 
-  private DrillRel convertToDrel(RelNode relNode, AbstractSchema schema, String tableName) throws RelConversionException {
+  protected DrillRel convertToDrel(RelNode relNode) throws RelConversionException {
     RelNode convertedRelNode = planner.transform(DrillSqlWorker.LOGICAL_RULES,
         relNode.getTraitSet().plus(DrillRel.DRILL_LOGICAL), relNode);
-
-    if (convertedRelNode instanceof DrillStoreRel)
+    if (convertedRelNode instanceof DrillStoreRel) {
       throw new UnsupportedOperationException();
-
-    DrillWriterRel writerRel = new DrillWriterRel(convertedRelNode.getCluster(), convertedRelNode.getTraitSet(),
-        convertedRelNode, schema.createNewTable(tableName));
-    return new DrillScreenRel(writerRel.getCluster(), writerRel.getTraitSet(), writerRel);
+    } else {
+      DrillAnalyzeRel dar = new DrillAnalyzeRel(
+          convertedRelNode.getCluster(),
+          convertedRelNode.getTraitSet(),
+          convertedRelNode);
+      return new DrillScreenRel(dar.getCluster(), dar.getTraitSet(), dar);
+    }
   }
 }

@@ -24,6 +24,7 @@ import net.hydromatic.optiq.prepare.Prepare;
 
 import org.apache.drill.common.expression.LogicalExpression;
 import org.apache.drill.common.logical.LogicalPlan;
+import org.apache.drill.common.logical.data.Analyze;
 import org.apache.drill.common.logical.data.Filter;
 import org.apache.drill.common.logical.data.GroupingAggregate;
 import org.apache.drill.common.logical.data.Join;
@@ -35,6 +36,7 @@ import org.apache.drill.common.logical.data.Scan;
 import org.apache.drill.common.logical.data.Union;
 import org.apache.drill.common.logical.data.visitors.AbstractLogicalVisitor;
 import org.apache.drill.exec.planner.logical.DrillAggregateRel;
+import org.apache.drill.exec.planner.logical.DrillAnalyzeRel;
 import org.apache.drill.exec.planner.logical.DrillJoinRel;
 import org.apache.drill.exec.planner.logical.DrillLimitRel;
 import org.apache.drill.exec.planner.logical.DrillRel;
@@ -158,6 +160,13 @@ public class ConversionContext implements ToRelContext {
     public RelNode visitGroupingAggregate(GroupingAggregate groupBy, ConversionContext context)
         throws InvalidRelException {
       return DrillAggregateRel.convert(groupBy, context);
+    }
+
+    @Override
+    public RelNode visitAnalyze(Analyze analyze, ConversionContext context)
+        throws InvalidRelException {
+      return DrillAnalyzeRel.convert(analyze, context);
+
     }
     
   }
