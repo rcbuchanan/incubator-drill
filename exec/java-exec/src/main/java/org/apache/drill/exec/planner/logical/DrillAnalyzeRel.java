@@ -30,6 +30,7 @@ import org.eigenbase.relopt.RelOptCluster;
 import org.eigenbase.relopt.RelOptCost;
 import org.eigenbase.relopt.RelOptPlanner;
 import org.eigenbase.relopt.RelTraitSet;
+import org.eigenbase.reltype.RelDataType;
 
 public class DrillAnalyzeRel extends SingleRel implements DrillRel {
 
@@ -51,6 +52,10 @@ public class DrillAnalyzeRel extends SingleRel implements DrillRel {
     return new DrillAnalyzeRel(getCluster(), traitSet, sole(inputs));
   }
 
+  protected RelDataType deriveRowType() {
+    return getChild().getRowType();
+  }
+  
   @Override
   public LogicalOperator implement(DrillImplementor implementor) {
     //LogicalOperator inputOp = implementor.visitChild(this, 0, getChild());

@@ -39,6 +39,7 @@ import org.apache.drill.exec.planner.types.DrillFixedRelDataTypeImpl;
 import org.apache.drill.exec.store.AbstractSchema;
 import org.eigenbase.rel.RelNode;
 import org.eigenbase.relopt.RelOptUtil;
+import org.eigenbase.relopt.RelTrait;
 import org.eigenbase.reltype.RelDataType;
 import org.eigenbase.sql.SqlIdentifier;
 import org.eigenbase.sql.SqlNode;
@@ -106,6 +107,9 @@ public class AnalyzeTableHandler extends DefaultSqlHandler {
           convertedRelNode.getCluster(),
           convertedRelNode.getTraitSet(),
           convertedRelNode);
+      for (RelTrait rt : dar.getTraitSet()) {
+        System.out.println("Trait: " + rt);
+      }
       return new DrillScreenRel(dar.getCluster(), dar.getTraitSet(), dar);
     }
   }

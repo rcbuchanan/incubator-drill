@@ -18,6 +18,7 @@
 package org.apache.drill.exec.planner.physical;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Iterator;
 import java.util.List;
@@ -39,6 +40,7 @@ import org.eigenbase.relopt.RelOptCluster;
 import org.eigenbase.relopt.RelOptCost;
 import org.eigenbase.relopt.RelOptPlanner;
 import org.eigenbase.relopt.RelTraitSet;
+import org.eigenbase.reltype.RelDataType;
 
 public class StatsAggPrel extends AggPrelBase implements Prel{
 
@@ -46,14 +48,13 @@ public class StatsAggPrel extends AggPrelBase implements Prel{
 
 
 
-  public StatsAggPrel(RelOptCluster cluster, RelTraitSet traits, RelNode child, BitSet groupSet,
-      List<AggregateCall> aggCalls, OperatorPhase phase) throws InvalidRelException {
-    super(cluster, traits, child, groupSet, aggCalls, phase);
+  public StatsAggPrel(RelOptCluster cluster, RelTraitSet traits, RelNode child, OperatorPhase phase) throws InvalidRelException {
+    super(cluster, traits, child, new BitSet(), new ArrayList<AggregateCall>(), phase);
   }
 
-  public AggregateRelBase copy(RelTraitSet traitSet, RelNode input, BitSet groupSet, List<AggregateCall> aggCalls) {
+  public AggregateRelBase copy(RelTraitSet traitSet, RelNode input, BitSet bs, List<AggregateCall> aggList) {
     try {
-      return new StatsAggPrel(getCluster(), traitSet, input, getGroupSet(), aggCalls,
+      return new StatsAggPrel(getCluster(), traitSet, input,
           this.getOperatorPhase());
     } catch (InvalidRelException e) {
       throw new AssertionError(e);
@@ -77,11 +78,15 @@ public class StatsAggPrel extends AggPrelBase implements Prel{
     DrillCostFactory costFactory = (DrillCostFactory)planner.getCostFactory();
     return costFactory.makeCost(inputRows, cpuCost, 0 /* disk i/o cost */, 0 /* network cost */);
   }
+  
+  protected RelDataType deriveRowType() {
+    return getChild().getRowType();
+  }
 
   @Override
   public PhysicalOperator getPhysicalOperator(PhysicalPlanCreator creator) throws IOException {
 
-    final String funcs [] = {"sum"};
+    final String funcs [] = {"count", "hll"};
     Prel child = (Prel) this.getChild();
     StatisticsAggregate g = new StatisticsAggregate(
         child.getPhysicalOperator(creator),

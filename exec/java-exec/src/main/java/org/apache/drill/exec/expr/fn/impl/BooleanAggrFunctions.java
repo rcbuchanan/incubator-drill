@@ -69,7 +69,7 @@ public class BooleanAggrFunctions {
   @FunctionTemplate(name = "hll", scope = FunctionTemplate.FunctionScope.POINT_AGGREGATE)
   public static class HllAggregate implements DrillAggFunc{
 
-    @Param VarCharHolder in;
+    @Param NullableVarCharHolder in;
     @Workspace VarBinaryHolder data;
     @Output VarBinaryHolder out;
 
