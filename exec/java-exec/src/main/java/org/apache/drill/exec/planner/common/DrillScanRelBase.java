@@ -17,19 +17,24 @@
  */
 package org.apache.drill.exec.planner.common;
 
+import java.util.BitSet;
+
 import org.apache.drill.exec.planner.logical.DrillTable;
+import org.eigenbase.rel.RelNode;
 import org.eigenbase.rel.TableAccessRelBase;
+import org.eigenbase.rel.metadata.BuiltInMetadata.DistinctRowCount;
 import org.eigenbase.relopt.Convention;
 import org.eigenbase.relopt.RelOptCluster;
 import org.eigenbase.relopt.RelOptTable;
 import org.eigenbase.relopt.RelTraitSet;
+import org.eigenbase.rex.RexNode;
 
 /**
  * Base class for logical scan rel implemented in Drill. 
  * NOTE: we should eventually make this class independent of TableAccessRelBase and then 
  * make it the base class for logical and physical scan rels.
  */
-public abstract class DrillScanRelBase extends TableAccessRelBase implements DrillRelNode {
+public abstract class DrillScanRelBase extends TableAccessRelBase implements DrillRelNode, DistinctRowCount {
   protected final DrillTable drillTable;
 
   public DrillScanRelBase(Convention convention, RelOptCluster cluster, RelTraitSet traits, RelOptTable table) {
@@ -38,4 +43,11 @@ public abstract class DrillScanRelBase extends TableAccessRelBase implements Dri
     assert drillTable != null;
   }
   
+  public Double getDistinctRowCount(BitSet groupKey, RexNode predicate) {
+    return 123456789.9;
+  }
+  
+  public RelNode rel() {
+    return this;
+  }
 }

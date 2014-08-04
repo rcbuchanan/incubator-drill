@@ -36,6 +36,7 @@ import org.apache.drill.exec.expr.annotations.Output;
 import org.apache.drill.exec.expr.annotations.Param;
 import org.apache.drill.exec.expr.annotations.Workspace;
 import org.apache.drill.exec.expr.holders.BitHolder;
+import org.apache.drill.exec.expr.holders.Float8Holder;
 import org.apache.drill.exec.expr.holders.NullableBitHolder;
 import org.apache.drill.exec.expr.holders.BigIntHolder;
 import org.apache.drill.exec.expr.holders.NullableBigIntHolder;
@@ -58,6 +59,8 @@ import org.apache.drill.exec.expr.holders.NullableUInt8Holder;
 import org.apache.drill.exec.expr.holders.VarBinaryHolder;
 import org.apache.drill.exec.expr.holders.VarCharHolder;
 import org.apache.drill.exec.record.RecordBatch;
+import org.apache.drill.exec.vector.complex.reader.FieldReader;
+import org.apache.drill.exec.vector.complex.writer.BaseWriter.ComplexWriter;
 
 import com.clearspring.analytics.stream.cardinality.CardinalityMergeException;
 import com.clearspring.analytics.stream.cardinality.HyperLogLog;
@@ -65,7 +68,33 @@ import com.clearspring.analytics.stream.cardinality.HyperLogLog;
 @SuppressWarnings("unused")
 public class BooleanAggrFunctions {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(BooleanAggrFunctions.class);
+  
+  @FunctionTemplate(name = "tfunc", scope = FunctionTemplate.FunctionScope.POINT_AGGREGATE)
+  public static class TFunc implements DrillAggFunc{
 
+    @Param FieldReader in;
+    @Output BigIntHolder out;
+
+    public void setup(RecordBatch b) {
+    }
+
+    @Override
+    public void add() {
+      int  i = 0;
+      for (String s : in) {
+        System.out.println(s + ", " + in.reader(s).getType());
+      }
+    }
+
+    @Override
+    public void output() {
+    }
+
+    @Override
+    public void reset() {
+    }
+  }
+  
   @FunctionTemplate(name = "hll", scope = FunctionTemplate.FunctionScope.POINT_AGGREGATE)
   public static class HllAggregate implements DrillAggFunc{
 

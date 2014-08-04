@@ -32,13 +32,13 @@ import org.eigenbase.rel.RelNode;
 import org.eigenbase.relopt.RelOptTable;
 
 
-public abstract class DrillTable implements Table{
+public abstract class DrillTable implements Table {
   
   private final String storageEngineName;  
   public final StoragePluginConfig storageEngineConfig;
   private Object selection;
   private StoragePlugin plugin;
-  private GroupScan scan; 
+  private GroupScan scan;
   
   /** Creates a DrillTable. */
   public DrillTable(String storageEngineName, StoragePlugin plugin, Object selection) {
@@ -49,6 +49,7 @@ public abstract class DrillTable implements Table{
     this.storageEngineName = storageEngineName;
   }
 
+  
   public GroupScan getGroupScan() throws IOException{
     if(scan == null){
       this.scan = plugin.getPhysicalScan(new JSONOptions(selection));

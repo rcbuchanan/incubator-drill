@@ -27,6 +27,7 @@ import org.apache.drill.exec.planner.physical.AggPrelBase.OperatorPhase;
 import org.eigenbase.rel.InvalidRelException;
 import org.eigenbase.rel.RelNode;
 import org.eigenbase.rel.RelWriter;
+import org.eigenbase.rel.SingleRel;
 import org.eigenbase.relopt.RelOptCluster;
 import org.eigenbase.relopt.RelOptRule;
 import org.eigenbase.relopt.RelOptRuleCall;
@@ -51,18 +52,18 @@ public class AnalyzePrule extends Prule {
 
     final RelTraitSet traits = input.getTraitSet().plus(Prel.DRILL_PHYSICAL).plus(DrillDistributionTrait.SINGLETON);
     final RelNode convertedInput = convert(input, traits);
-    UnpivotPrel newAnalyze = null;
+    SingleRel newAnalyze = null;
     try {
-      newAnalyze = new UnpivotPrel(
+      newAnalyze = /*new UnpivotPrel(
           analyze.getCluster(),
-          analyze.getTraitSet().plus(Prel.DRILL_PHYSICAL).plus(DrillDistributionTrait.SINGLETON),
+          analyze.getTraitSet().plus(Prel.DRILL_PHYSICAL).plus(DrillDistributionTrait.SINGLETON),*/
           new StatsAggPrel(
               analyze.getCluster(),
               analyze.getTraitSet().plus(Prel.DRILL_PHYSICAL).plus(DrillDistributionTrait.SINGLETON),
               convertedInput,
-              OperatorPhase.PHASE_1of1),
+              OperatorPhase.PHASE_1of1)/*,
           new ArrayList<RexNode>(),
-          analyze.getRowType());
+          analyze.getRowType())*/;
     } catch (InvalidRelException e) {
       // TODO Auto-generated catch block
       e.printStackTrace();

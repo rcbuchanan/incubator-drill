@@ -18,9 +18,11 @@
 package org.apache.drill.exec.planner.sql.handlers;
 
 import java.io.IOException;
+import java.util.BitSet;
 import java.util.Collection;
 import java.util.List;
 
+import net.hydromatic.optiq.BuiltinMethod;
 import net.hydromatic.optiq.tools.Planner;
 import net.hydromatic.optiq.tools.RelConversionException;
 import net.hydromatic.optiq.tools.ValidationException;
@@ -56,14 +58,26 @@ import org.apache.drill.exec.planner.physical.visitor.StarColumnConverter;
 import org.apache.drill.exec.planner.sql.DrillSqlWorker;
 import org.apache.drill.exec.util.Pointer;
 import org.eigenbase.rel.RelNode;
+import org.eigenbase.rel.RelVisitor;
+import org.eigenbase.rel.metadata.BuiltInMetadata;
+import org.eigenbase.rel.metadata.ChainedRelMetadataProvider;
+import org.eigenbase.rel.metadata.ReflectiveRelMetadataProvider;
+import org.eigenbase.rel.metadata.RelMdDistinctRowCount;
+import org.eigenbase.rel.metadata.RelMdExplainVisibility;
+import org.eigenbase.rel.metadata.RelMdSelectivity;
+import org.eigenbase.rel.metadata.RelMetadataProvider;
+import org.eigenbase.rel.metadata.RelMetadataQuery;
 import org.eigenbase.relopt.RelOptUtil;
 import org.eigenbase.relopt.RelTraitSet;
 import org.eigenbase.rex.RexBuilder;
+import org.eigenbase.rex.RexLiteral;
+import org.eigenbase.rex.RexNode;
 import org.eigenbase.sql.SqlExplainLevel;
 import org.eigenbase.sql.SqlNode;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
 public class DefaultSqlHandler extends AbstractSqlHandler {
@@ -124,6 +138,15 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
     rel = rel.accept(new RewriteProjectRel(planner.getTypeFactory(), context.getDrillOperatorTable()));
     log("Optiq Logical", rel);
     DrillRel drel = convertToDrel(rel);
+    
+    /*drel.getCluster().setMetadataProvider(
+        ChainedRelMetadataProvider.of(
+            Lists.newArrayList(
+                DrillAnalyzeTableRelMd.SOURCE,
+                drel.getCluster().getMetadataProvider())));
+    new MetadataPrinter().go(drel);*/
+    
+    
     log("Drill Logical", drel);
     Prel prel = convertToPrel(drel);
     log("Drill Physical", prel);
@@ -274,5 +297,23 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
    */
   public SqlNode rewrite(SqlNode node) throws RelConversionException {
     return node;
+  }
+}
+
+class MetadataPrinter extends RelVisitor {
+  public void visit(
+      RelNode node,
+      int ordinal,
+      RelNode parent) {
+    System.out.println("VISITED : " + node.getDescription());
+    
+    BitSet bs = new BitSet();
+    bs.set(0);
+    System.out.println("KEY : " + RelMetadataQuery.getUniqueKeys(node));
+    System.out.println("ROW : " + RelMetadataQuery.getRowCount(node));
+    System.out.println("POP : " + RelMetadataQuery.getPopulationSize(node, bs));
+    RexLiteral truth = node.getCluster().getRexBuilder().makeLiteral(true);
+    System.out.println("NDV :" + RelMetadataQuery.getDistinctRowCount(node, bs, truth));
+    super.visit(node,  ordinal, parent);
   }
 }
