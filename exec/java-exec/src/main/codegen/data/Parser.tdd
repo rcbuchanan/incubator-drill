@@ -34,7 +34,14 @@
     "SHOW",
     "TABLES",
     "USE",
-    "FILES"
+    "FILES",
+    "ANALYZE",
+    "COMPUTE",
+    "ESTIMATE",
+    "STATISTICS",
+    "COLUMNS",
+    "SAMPLE"
+    "PERCENT"
   ]
 
   # List of methods for parsing custom SQL statements.
@@ -47,6 +54,7 @@
     "SqlDropView()",
     "SqlShowFiles()",
     "SqlCreateTable()"
+    "SqlAnalyzeTable()"
   ]
 
   # List of methods for parsing custom literals.
