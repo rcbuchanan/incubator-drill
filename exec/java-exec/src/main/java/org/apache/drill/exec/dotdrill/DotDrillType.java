@@ -22,7 +22,7 @@ import org.apache.hadoop.fs.FileStatus;
 public enum DotDrillType {
   VIEW
   // ,FORMAT
-  // ,STATS
+  ,STATS
   ;
 
   private final String ending;

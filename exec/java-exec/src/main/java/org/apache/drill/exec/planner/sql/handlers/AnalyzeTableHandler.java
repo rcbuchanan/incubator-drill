@@ -61,56 +61,79 @@ public class AnalyzeTableHandler extends DefaultSqlHandler {
   public PhysicalPlan getPlan(SqlNode sqlNode) throws ValidationException, RelConversionException, IOException {
     SqlAnalyzeTable sqlAnalyzeTable = unwrap(sqlNode, SqlAnalyzeTable.class);
     
-    logger.debug("INVOKING THE \"SPECIAL\" HANDLER");
-    
-    SqlIdentifier tableIdentifier = sqlAnalyzeTable.getTableIdentifier();
-    SqlNodeList allNodes = new SqlNodeList(SqlParserPos.ZERO);
-    allNodes.add(new SqlIdentifier("*", SqlParserPos.ZERO));
-    SqlSelect sqlSelect = new SqlSelect(
-        SqlParserPos.ZERO, /* position */
-        SqlNodeList.EMPTY, /* keyword list */
-        allNodes, /*select list */
-        tableIdentifier, /* from */
-        null, /* where */
-        null, /* group by */
-        null, /* having */
-        null, /* windowDecls */
-        null, /* orderBy */
-        null, /* offset */
-        null /* fetch */);
+    try {
+      SqlIdentifier tableIdentifier = sqlAnalyzeTable.getTableIdentifier();
+      SqlNodeList allNodes = new SqlNodeList(SqlParserPos.ZERO);
+      allNodes.add(new SqlIdentifier("*", SqlParserPos.ZERO));
+      SqlSelect sqlSelect = new SqlSelect(
+          SqlParserPos.ZERO, /* position */
+          SqlNodeList.EMPTY, /* keyword list */
+          allNodes, /*select list */
+          tableIdentifier, /* from */
+          null, /* where */
+          null, /* group by */
+          null, /* having */
+          null, /* windowDecls */
+          null, /* orderBy */
+          null, /* offset */
+          null /* fetch */);
+      
+      SqlNode rewrittenSelect = rewrite(sqlSelect);
+      SqlNode validated = validateNode(rewrittenSelect);
+      RelNode relQuery = convertToRel(validated);
+      
+       SchemaPlus schema = findSchema(
+                context.getRootSchema(),
+                context.getNewDefaultSchema(),
+                sqlAnalyzeTable.getSchemaPath());
+      
+      AbstractSchema drillSchema = getDrillSchema(schema);
+      
+      if (!drillSchema.isMutable())
+        return DirectPlan.createDirectPlan(context, false, String.format("Current schema '%s' is not a mutable schema. " +
+            "Can't create tables in this schema.", drillSchema.getFullSchemaName()));
+      
+      String analyzeTableName = sqlAnalyzeTable.getName();
+      
+      // TODO: join or something if stats have already been computed
+      if (drillSchema.getTableStatsTable(analyzeTableName) != null) {
+        return DirectPlan.createDirectPlan(context, false, 
+            String.format("Table '%s' has already been analyzed!.", analyzeTableName));
+      }
+      
+      // Convert the query to Drill Logical plan and insert a writer operator on top.
+      DrillRel drel = convertToDrel(relQuery, drillSchema, analyzeTableName);
+      log("Drill Logical", drel);
+      
+      Prel prel = convertToPrel(drel);
+      log("Drill Physical", prel);
+      PhysicalOperator pop = convertToPop(prel);
+      PhysicalPlan plan = convertToPlan(pop);
+      log("Drill Plan", plan);
+      
+      return plan;
+    } catch (Exception e) {
+      logger.error("Failed analyze table '{}'", sqlAnalyzeTable.getName(), e);
+      return DirectPlan.createDirectPlan(context, false, String.format("Error: %s", e.getMessage()));
 
-    SqlNode rewrittenSelect = rewrite(sqlSelect);
-    SqlNode validated = validateNode(rewrittenSelect);
-    RelNode relQuery = convertToRel(validated);
-
-    // Convert the query to Drill Logical plan and insert a writer operator on top.
-    DrillRel drel = convertToDrel(relQuery);
-    log("Drill Logical", drel);
-    
-    
-    Prel prel = convertToPrel(drel);
-    log("Drill Physical", prel);
-    PhysicalOperator pop = convertToPop(prel);
-    PhysicalPlan plan = convertToPlan(pop);
-    log("Drill Plan", plan);
-
-    return plan;
+    }
   }
 
-  protected DrillRel convertToDrel(RelNode relNode) throws RelConversionException {
+  protected DrillRel convertToDrel(RelNode relNode, AbstractSchema schema, String analyzeTableName) throws RelConversionException {
     RelNode convertedRelNode = planner.transform(DrillSqlWorker.LOGICAL_RULES,
         relNode.getTraitSet().plus(DrillRel.DRILL_LOGICAL), relNode);
     if (convertedRelNode instanceof DrillStoreRel) {
       throw new UnsupportedOperationException();
     } else {
-      DrillAnalyzeRel dar = new DrillAnalyzeRel(
-          convertedRelNode.getCluster(),
-          convertedRelNode.getTraitSet(),
-          convertedRelNode);
-      for (RelTrait rt : dar.getTraitSet()) {
-        System.out.println("Trait: " + rt);
-      }
-      return new DrillScreenRel(dar.getCluster(), dar.getTraitSet(), dar);
+      DrillWriterRel writerRel = new DrillWriterRel(
+              convertedRelNode.getCluster(),
+              convertedRelNode.getTraitSet(),
+              new DrillAnalyzeRel(
+                      convertedRelNode.getCluster(),
+                      convertedRelNode.getTraitSet(),
+                      convertedRelNode),
+              schema.createTableStats(analyzeTableName));
+      return new DrillScreenRel(writerRel.getCluster(), writerRel.getTraitSet(), writerRel);
     }
   }
 }

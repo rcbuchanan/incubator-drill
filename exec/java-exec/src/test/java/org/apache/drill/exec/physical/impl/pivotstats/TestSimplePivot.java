@@ -73,8 +73,9 @@ public class TestSimplePivot extends BaseTestQuery {
   public void pivot(@Injectable final DrillbitContext bitContext, @Injectable UserClientConnection connection) throws Throwable{
     //List<QueryResultBatch> results = testPhysicalWithResults(Files.toString(FileUtils.getResourceAsFile("/statspivot/test1.json"), Charsets.UTF_8));
     //List<QueryResultBatch> results = testSqlWithResults("select * from dfs.`/Users/rbuchanan/test2.json`");
-    //List<QueryResultBatch> results = testSqlWithResults("analyze table dfs.`/Users/rbuchanan/test2.json` compute statistics for all columns");
-    List<QueryResultBatch> results = testSqlWithResults("select tfunc(tab.complex) from dfs.`/Users/rbuchanan/test2.json` as tab");
+    List<QueryResultBatch> results = testSqlWithResults("analyze table dfs.tmp.`/test.json` compute statistics for all columns");
+    //List<QueryResultBatch> results = testSqlWithResults("create table dfs.tmp.`/taoeuest.csv` as (select * from dfs.`/tmp/foo.json`)");
+    //List<QueryResultBatch> results = testSqlWithResults("select tfunc(tab.complex) from dfs.`/Users/rbuchanan/test2.json` as tab");
     System.out.println("Batch count: " + results.size());
     //RecordBatchLoader loader = new RecordBatchLoader(getAllocator());
     printResult(results);

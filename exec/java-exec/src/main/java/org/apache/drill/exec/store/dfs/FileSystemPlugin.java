@@ -126,6 +126,19 @@ public class FileSystemPlugin extends AbstractStoragePlugin{
     return plugin.getGroupScan(formatSelection.getSelection(), columns);
   }
 
+  public AbstractGroupScan getPhysicalStatisticsScan(JSONOptions selection, List<SchemaPath> columns) throws IOException {
+    FormatSelection formatSelection = selection.getWith(context.getConfig(), FormatSelection.class);
+    
+    FormatPlugin plugin;
+    if(formatSelection.getFormat() instanceof NamedFormatPluginConfig){
+      plugin = formatsByName.get( ((NamedFormatPluginConfig) formatSelection.getFormat()).name);
+    }else{
+      plugin = formatPluginsByConfig.get(formatSelection.getFormat());
+    }
+    if(plugin == null) throw new IOException(String.format("Failure getting requested format plugin named '%s'.  It was not one of the format plugins registered.", formatSelection.getFormat()));
+    return plugin.getGroupScan(formatSelection.getSelection(), columns);
+  }
+
   @Override
   public void registerSchemas(UserSession session, SchemaPlus parent) {
     schemaFactory.registerSchemas(session, parent);

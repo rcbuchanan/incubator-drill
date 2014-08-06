@@ -51,10 +51,6 @@ public class DrillAnalyzeRel extends SingleRel implements DrillRel {
   public RelNode copy(RelTraitSet traitSet, List<RelNode> inputs) {
     return new DrillAnalyzeRel(getCluster(), traitSet, sole(inputs));
   }
-
-  protected RelDataType deriveRowType() {
-    return getChild().getRowType();
-  }
   
   @Override
   public LogicalOperator implement(DrillImplementor implementor) {
@@ -63,7 +59,7 @@ public class DrillAnalyzeRel extends SingleRel implements DrillRel {
     return builder.build();
   }
   
-  public static DrillUnionRel convert(Analyze analyze, ConversionContext context) throws InvalidRelException{
+  public static DrillAnalyzeRel convert(Analyze analyze, ConversionContext context) throws InvalidRelException{
     throw new UnsupportedOperationException();
   }
 

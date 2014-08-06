@@ -81,6 +81,10 @@ public abstract class AbstractSchema implements Schema{
   public CreateTableEntry createNewTable(String tableName) {
     throw new UnsupportedOperationException("New tables are not allowed in this schema");
   }
+  
+  public CreateTableEntry createTableStats(String tableName) {
+    return createNewTable(tableName + ".stats.drill");
+  }
 
   public boolean showInInformationSchema() {
     return true;
@@ -114,6 +118,11 @@ public abstract class AbstractSchema implements Schema{
   @Override
   public Table getTable(String name){
     return null;
+  }
+  
+  public Table getTableStatsTable(String name) {
+    return name.endsWith(".stats.drill") ?
+        getTable(name + ".stats.drill") : null;
   }
 
   @Override

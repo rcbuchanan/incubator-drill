@@ -161,14 +161,6 @@ public class ConversionContext implements ToRelContext {
         throws InvalidRelException {
       return DrillAggregateRel.convert(groupBy, context);
     }
-
-    @Override
-    public RelNode visitAnalyze(Analyze analyze, ConversionContext context)
-        throws InvalidRelException {
-      return DrillAnalyzeRel.convert(analyze, context);
-
-    }
-    
   }
 
 

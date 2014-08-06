@@ -101,6 +101,8 @@ public class StatisticsAggBatch extends StreamingAggBatch {
         LogicalExpression expr = ExpressionTreeMaterializer.materialize(
             FunctionCallFactory.createExpression(funcs[i], args),
             incoming, collector, context.getFunctionRegistry());
+        
+        //TODO: nope.
         if(expr == null) {
           expr = new NullExpression();
         }
