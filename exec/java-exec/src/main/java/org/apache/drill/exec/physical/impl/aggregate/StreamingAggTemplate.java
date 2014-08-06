@@ -296,6 +296,9 @@ public abstract class StreamingAggTemplate implements StreamingAggregator {
   }
 
   private final boolean outputToBatch(int inIndex){
+    for (VectorWrapper<?> vw : outgoing) {
+      vw.getValueVector().getMutator().setValueCount(outputCount);
+    }
 
     if(!outputRecordKeys(inIndex, outputCount)){
       if(EXTRA_DEBUG) logger.debug("Failure while outputting keys {}", outputCount);
@@ -311,10 +314,17 @@ public abstract class StreamingAggTemplate implements StreamingAggregator {
     resetValues();
     outputCount++;
     addedRecordCount = 0;
+    
+    for (VectorWrapper vw : outgoing) {
+      vw.getValueVector().getMutator().setValueCount(outputCount);
+    }
     return true;
   }
 
   private final boolean outputToBatchPrev(InternalBatch b1, int inIndex, int outIndex){
+    for (VectorWrapper<?> vw : outgoing) {
+      vw.getValueVector().getMutator().setValueCount(outputCount);
+    }
     boolean success = outputRecordKeysPrev(b1, inIndex, outIndex) //
         && outputRecordValues(outIndex) //
         && resetValues();
@@ -323,7 +333,9 @@ public abstract class StreamingAggTemplate implements StreamingAggregator {
       outputCount++;
       addedRecordCount = 0;
     }
-
+    for (VectorWrapper vw : outgoing) {
+      vw.getValueVector().getMutator().setValueCount(outputCount);
+    }
     return success;
   }
 
