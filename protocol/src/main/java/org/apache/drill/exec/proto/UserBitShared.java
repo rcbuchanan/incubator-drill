@@ -462,6 +462,14 @@ public final class UserBitShared {
      * <code>PRODUCER_CONSUMER = 32;</code>
      */
     PRODUCER_CONSUMER(32, 32),
+    /**
+     * <code>STATISTICS_AGGREGATE = 33;</code>
+     */
+    STATISTICS_AGGREGATE(33, 33),
+    /**
+     * <code>UNPIVOT_MAPS = 34;</code>
+     */
+    UNPIVOT_MAPS(34, 34),
     ;
 
     /**
@@ -596,6 +604,14 @@ public final class UserBitShared {
      * <code>PRODUCER_CONSUMER = 32;</code>
      */
     public static final int PRODUCER_CONSUMER_VALUE = 32;
+    /**
+     * <code>STATISTICS_AGGREGATE = 33;</code>
+     */
+    public static final int STATISTICS_AGGREGATE_VALUE = 33;
+    /**
+     * <code>UNPIVOT_MAPS = 34;</code>
+     */
+    public static final int UNPIVOT_MAPS_VALUE = 34;
 
 
     public final int getNumber() { return value; }
@@ -635,6 +651,8 @@ public final class UserBitShared {
         case 30: return INFO_SCHEMA_SUB_SCAN;
         case 31: return COMPLEX_TO_JSON;
         case 32: return PRODUCER_CONSUMER;
+        case 33: return STATISTICS_AGGREGATE;
+        case 34: return UNPIVOT_MAPS;
         default: return null;
       }
     }
@@ -16539,7 +16557,7 @@ public final class UserBitShared {
       "\020\001\022\013\n\007LOGICAL\020\002\022\014\n\010PHYSICAL\020\003*k\n\rFragmen" +
       "tState\022\013\n\007SENDING\020\000\022\027\n\023AWAITING_ALLOCATI",
       "ON\020\001\022\013\n\007RUNNING\020\002\022\014\n\010FINISHED\020\003\022\r\n\tCANCE" +
-      "LLED\020\004\022\n\n\006FAILED\020\005*\224\005\n\020CoreOperatorType\022" +
+      "LLED\020\004\022\n\n\006FAILED\020\005*\300\005\n\020CoreOperatorType\022" +
       "\021\n\rSINGLE_SENDER\020\000\022\024\n\020BROADCAST_SENDER\020\001" +
       "\022\n\n\006FILTER\020\002\022\022\n\016HASH_AGGREGATE\020\003\022\r\n\tHASH" +
       "_JOIN\020\004\022\016\n\nMERGE_JOIN\020\005\022\031\n\025HASH_PARTITIO" +
@@ -16556,8 +16574,9 @@ public final class UserBitShared {
       "TEXT_WRITER\020\033\022\021\n\rTEXT_SUB_SCAN\020\034\022\021\n\rJSON" +
       "_SUB_SCAN\020\035\022\030\n\024INFO_SCHEMA_SUB_SCAN\020\036\022\023\n" +
       "\017COMPLEX_TO_JSON\020\037\022\025\n\021PRODUCER_CONSUMER\020" +
-      " B.\n\033org.apache.drill.exec.protoB\rUserBi" +
-      "tSharedH\001"
+      " \022\030\n\024STATISTICS_AGGREGATE\020!\022\020\n\014UNPIVOT_M" +
+      "APS\020\"B.\n\033org.apache.drill.exec.protoB\rUs",
+      "erBitSharedH\001"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
       new com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner() {
