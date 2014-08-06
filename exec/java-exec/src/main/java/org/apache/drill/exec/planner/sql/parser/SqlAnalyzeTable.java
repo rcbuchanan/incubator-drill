@@ -115,6 +115,13 @@ public class SqlAnalyzeTable extends DrillSqlCall {
     return tblName;
   }
 
+  public String getName() {
+    if (tblName.isSimple())
+      return tblName.getSimple();
+
+    return tblName.names.get(tblName.names.size() - 1);
+  }
+  
   public List<String> getFieldNames() {
     if (fieldList == null) return ImmutableList.of();
 
