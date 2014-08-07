@@ -165,8 +165,8 @@ public class StatisticsAggrFunctions {
 
     @Override
     public void output() {
-      out.buffer = null;
       out.start = out.end = out.isSet = 0;
+      out.buffer = null;
     }
 
     @Override
@@ -184,13 +184,16 @@ public class StatisticsAggrFunctions {
     }
 
     public void eval(){
-      byte [] din = new byte[in.end - in.start];
-      in.buffer.getBytes(in.start, din);
+      out.value = -1;
       
-      try {
-        out.value = com.clearspring.analytics.stream.cardinality.HyperLogLog.Builder.build(din).cardinality();
-      } catch (java.io.IOException e) {
-        e.printStackTrace();
+      if (in.isSet()) {
+        byte [] din = new byte[in.end - in.start];
+        in.buffer.getBytes(in.start, din);
+        try {
+          out.value = com.clearspring.analytics.stream.cardinality.HyperLogLog.Builder.build(din).cardinality();
+        } catch (java.io.IOException e) {
+          e.printStackTrace();
+        }
       }
     }
   }
