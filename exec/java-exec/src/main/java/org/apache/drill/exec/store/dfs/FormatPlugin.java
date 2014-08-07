@@ -42,7 +42,7 @@ public interface FormatPlugin {
   
   public FormatMatcher getMatcher();
 
-  public AbstractWriter getWriter(PhysicalOperator child, String location) throws IOException;
+  public AbstractWriter getWriter(PhysicalOperator child, String location, boolean append) throws IOException;
 
   public AbstractGroupScan getGroupScan(FileSelection selection) throws IOException;
 

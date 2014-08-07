@@ -81,6 +81,14 @@ public abstract class AbstractSchema implements Schema{
   public CreateTableEntry createNewTable(String tableName) {
     throw new UnsupportedOperationException("New tables are not allowed in this schema");
   }
+  
+  public CreateTableEntry appendToTable(String tableName) {
+    throw new UnsupportedOperationException("Appending to tables is not allowed in this schema");
+  }
+  
+  public CreateTableEntry appendTableStats(String tableName) {
+    return appendToTable(tableName + ".stats.drill");
+  }
 
   public boolean showInInformationSchema() {
     return true;

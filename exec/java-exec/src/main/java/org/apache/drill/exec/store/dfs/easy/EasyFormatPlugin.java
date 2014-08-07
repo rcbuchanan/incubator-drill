@@ -174,8 +174,8 @@ public abstract class EasyFormatPlugin<T extends FormatPluginConfig> implements 
   }
 
   @Override
-  public AbstractWriter getWriter(PhysicalOperator child, String location) throws IOException {
-    return new EasyWriter(child, location, this);
+  public AbstractWriter getWriter(PhysicalOperator child, String location, boolean append) throws IOException {
+    return new EasyWriter(child, location, append, this);
   }
 
   @Override

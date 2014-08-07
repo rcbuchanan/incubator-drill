@@ -89,13 +89,17 @@ public class ParquetRecordWriter extends ParquetOutputRecordWriter {
 
   private Configuration conf;
   private String location;
+  private boolean append;
   private String prefix;
   private int index = 0;
 
   @Override
   public void init(Map<String, String> writerOptions) throws IOException {
     this.location = writerOptions.get("location");
+    this.append = writerOptions.get("append").equalsIgnoreCase("true") ? true : false;
     this.prefix = writerOptions.get("prefix");
+    
+    assert !append;
 
     conf = new Configuration();
     conf.set(FileSystem.FS_DEFAULT_NAME_KEY, writerOptions.get(FileSystem.FS_DEFAULT_NAME_KEY));
