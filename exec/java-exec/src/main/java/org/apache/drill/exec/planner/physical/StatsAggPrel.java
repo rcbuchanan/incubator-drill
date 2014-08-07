@@ -17,81 +17,47 @@
  */
 package org.apache.drill.exec.planner.physical;
 
+import org.apache.drill.exec.physical.base.PhysicalOperator;
+import org.apache.drill.exec.physical.config.ProducerConsumer;
+import org.apache.drill.exec.physical.config.StatisticsAggregate;
+import org.apache.drill.exec.planner.common.DrillRelNode;
+import org.apache.drill.exec.planner.physical.visitor.PrelVisitor;
+import org.apache.drill.exec.record.BatchSchema.SelectionVectorMode;
+import org.eigenbase.rel.RelNode;
+import org.eigenbase.rel.SingleRel;
+import org.eigenbase.relopt.RelOptCluster;
+import org.eigenbase.relopt.RelTraitSet;
+
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.BitSet;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
-import org.apache.drill.common.logical.data.NamedExpression;
-import org.apache.drill.exec.physical.base.PhysicalOperator;
-import org.apache.drill.exec.physical.config.StatisticsAggregate;
-import org.apache.drill.exec.planner.cost.DrillCostBase;
-import org.apache.drill.exec.planner.cost.DrillCostBase.DrillCostFactory;
-import org.apache.drill.exec.planner.logical.DrillParseContext;
-import org.apache.drill.exec.planner.physical.visitor.PrelVisitor;
-import org.apache.drill.exec.record.BatchSchema.SelectionVectorMode;
-import org.eigenbase.rel.AggregateCall;
-import org.eigenbase.rel.AggregateRelBase;
-import org.eigenbase.rel.InvalidRelException;
-import org.eigenbase.rel.RelNode;
-import org.eigenbase.rel.metadata.RelMetadataQuery;
-import org.eigenbase.relopt.RelOptCluster;
-import org.eigenbase.relopt.RelOptCost;
-import org.eigenbase.relopt.RelOptPlanner;
-import org.eigenbase.relopt.RelTraitSet;
-import org.eigenbase.reltype.RelDataType;
-
-public class StatsAggPrel extends AggPrelBase implements Prel{
-
+public class StatsAggPrel extends SingleRel implements DrillRelNode, Prel {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StatsAggPrel.class);
+  
+  private String [] funcs;
 
 
-
-  public StatsAggPrel(RelOptCluster cluster, RelTraitSet traits, RelNode child, OperatorPhase phase) throws InvalidRelException {
-    super(cluster, traits, child, new BitSet(), new ArrayList<AggregateCall>(), phase);
+  public StatsAggPrel(RelNode child, RelOptCluster cluster, String [] funcs) {
+    super(child.getCluster(), child.getTraitSet(), child);
+    this.funcs = funcs;
   }
-
-  public AggregateRelBase copy(RelTraitSet traitSet, RelNode input, BitSet bs, List<AggregateCall> aggList) {
-    try {
-      return new StatsAggPrel(getCluster(), traitSet, input,
-          this.getOperatorPhase());
-    } catch (InvalidRelException e) {
-      throw new AssertionError(e);
-    }
-  }
-
 
   @Override
-  public RelOptCost computeSelfCost(RelOptPlanner planner) {
-    if(PrelUtil.getSettings(getCluster()).useDefaultCosting()) {
-      return super.computeSelfCost(planner).multiplyBy(.1);
-    }
-    RelNode child = this.getChild();
-    double inputRows = RelMetadataQuery.getRowCount(child);
-
-    int numGroupByFields = this.getGroupCount();
-    int numAggrFields = this.aggCalls.size();
-    double cpuCost = DrillCostBase.COMPARE_CPU_COST * numGroupByFields * inputRows;
-    // add cpu cost for computing the aggregate functions
-    cpuCost += DrillCostBase.FUNC_CPU_COST * numAggrFields * inputRows;
-    DrillCostFactory costFactory = (DrillCostFactory)planner.getCostFactory();
-    return costFactory.makeCost(inputRows, cpuCost, 0 /* disk i/o cost */, 0 /* network cost */);
-  }
-  
-  protected RelDataType deriveRowType() {
-    return getChild().getRowType();
+  public RelNode copy(RelTraitSet traitSet, List<RelNode> inputs) {
+    String [] c = Arrays.copyOf(funcs, funcs.length);
+    return new StatsAggPrel(sole(inputs), getCluster(), c);
   }
 
   @Override
   public PhysicalOperator getPhysicalOperator(PhysicalPlanCreator creator) throws IOException {
-
-    final String funcs [] = {"count", "hll"};
     Prel child = (Prel) this.getChild();
-    StatisticsAggregate g = new StatisticsAggregate(
-        child.getPhysicalOperator(creator),
-        funcs, 1.0f);
-
+    
+    PhysicalOperator childPOP = child.getPhysicalOperator(creator);
+    
+    StatisticsAggregate g = new StatisticsAggregate(childPOP, funcs, 1.0f);
+    
     return creator.addMetadata(this, g);
 
   }
@@ -114,5 +80,10 @@ public class StatsAggPrel extends AggPrelBase implements Prel{
   @Override
   public SelectionVectorMode getEncoding() {
     return SelectionVectorMode.NONE;
+  }
+
+  @Override
+  public boolean needsFinalColumnReordering() {
+    return true;
   }
 }

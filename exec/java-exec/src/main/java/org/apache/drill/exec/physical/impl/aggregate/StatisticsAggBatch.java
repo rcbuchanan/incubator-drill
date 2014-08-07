@@ -76,9 +76,9 @@ public class StatisticsAggBatch extends StreamingAggBatch {
     ClassGenerator<StreamingAggregator> cg = CodeGenerator.getRoot(StreamingAggTemplate.TEMPLATE_DEFINITION, context.getFunctionRegistry());
     container.clear();
 
-    LogicalExpression[] keyExprs = new LogicalExpression[1];
+    LogicalExpression[] keyExprs = new LogicalExpression[2];
     LogicalExpression[] valueExprs = new LogicalExpression[incoming.getSchema().getFieldCount() * funcs.length];
-    TypedFieldId[] keyOutputIds = new TypedFieldId[1];
+    TypedFieldId[] keyOutputIds = new TypedFieldId[2];
 
     ErrorCollector collector = new ErrorCollectorImpl();
 
@@ -90,6 +90,16 @@ public class StatisticsAggBatch extends StreamingAggBatch {
       final MaterializedField outputField = MaterializedField.create("schemaId", expr.getMajorType());
       ValueVector vector = TypeHelper.getNewVector(outputField, oContext.getAllocator());
       keyOutputIds[0] = container.add(vector);
+    }
+    
+    {
+      final LogicalExpression expr = ExpressionTreeMaterializer.materialize(
+          new ValueExpressions.TimeStampExpression(System.currentTimeMillis()),
+          incoming, collector, context.getFunctionRegistry());
+      keyExprs[1] = expr;
+      final MaterializedField outputField = MaterializedField.create("computed", expr.getMajorType());
+      ValueVector vector = TypeHelper.getNewVector(outputField, oContext.getAllocator());
+      keyOutputIds[1] = container.add(vector);
     }
 
     for (int i = 0; i < funcs.length; i++) {
