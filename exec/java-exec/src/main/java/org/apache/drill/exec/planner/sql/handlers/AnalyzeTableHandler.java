@@ -34,18 +34,15 @@ import org.apache.drill.exec.planner.physical.Prel;
 import org.apache.drill.exec.planner.sql.DirectPlan;
 import org.apache.drill.exec.planner.sql.DrillSqlWorker;
 import org.apache.drill.exec.planner.sql.parser.SqlAnalyzeTable;
-import org.apache.drill.exec.planner.sql.parser.SqlCreateTable;
 import org.apache.drill.exec.planner.types.DrillFixedRelDataTypeImpl;
 import org.apache.drill.exec.store.AbstractSchema;
 import org.eigenbase.rel.RelNode;
 import org.eigenbase.relopt.RelOptUtil;
-import org.eigenbase.relopt.RelTrait;
 import org.eigenbase.reltype.RelDataType;
 import org.eigenbase.sql.SqlIdentifier;
 import org.eigenbase.sql.SqlNode;
 import org.eigenbase.sql.SqlNodeList;
 import org.eigenbase.sql.SqlSelect;
-import org.eigenbase.sql.SqlSelectKeyword;
 import org.eigenbase.sql.parser.SqlParserPos;
 
 import java.io.IOException;
@@ -65,7 +62,7 @@ public class AnalyzeTableHandler extends DefaultSqlHandler {
       SqlIdentifier tableIdentifier = sqlAnalyzeTable.getTableIdentifier();
       SqlNodeList allNodes = new SqlNodeList(SqlParserPos.ZERO);
       allNodes.add(new SqlIdentifier("*", SqlParserPos.ZERO));
-      SqlSelect sqlSelect = new SqlSelect(
+      SqlSelect scanSql = new SqlSelect(
           SqlParserPos.ZERO, /* position */
           SqlNodeList.EMPTY, /* keyword list */
           allNodes, /*select list */
@@ -78,15 +75,24 @@ public class AnalyzeTableHandler extends DefaultSqlHandler {
           null, /* offset */
           null /* fetch */);
       
-      SqlNode rewrittenSelect = rewrite(sqlSelect);
-      SqlNode validated = validateNode(rewrittenSelect);
-      RelNode relQuery = convertToRel(validated);
+      SqlNode rewrittenScan = rewrite(scanSql);
+      SqlNode validated = validateNode(rewrittenScan);
+      RelNode relScan = convertToRel(validated);
+
+      // don't analyze all columns
+      List<String> analyzeFields = sqlAnalyzeTable.getFieldNames();
+      if (analyzeFields.size() > 0) {
+        RelDataType rowType = new DrillFixedRelDataTypeImpl(
+            planner.getTypeFactory(), analyzeFields);
+        relScan = RelOptUtil.createCastRel(relScan, rowType, true);
+      }
       
-       SchemaPlus schema = findSchema(
-                context.getRootSchema(),
-                context.getNewDefaultSchema(),
-                sqlAnalyzeTable.getSchemaPath());
       
+      SchemaPlus schema = findSchema(
+          context.getRootSchema(),
+          context.getNewDefaultSchema(),
+          sqlAnalyzeTable.getSchemaPath());
+
       AbstractSchema drillSchema = getDrillSchema(schema);
       
       if (!drillSchema.isMutable())
@@ -100,9 +106,8 @@ public class AnalyzeTableHandler extends DefaultSqlHandler {
         return DirectPlan.createDirectPlan(context, false, 
             String.format("Table '%s' has already been analyzed!.", analyzeTableName));
       }
-      
       // Convert the query to Drill Logical plan and insert a writer operator on top.
-      DrillRel drel = convertToDrel(relQuery, drillSchema, analyzeTableName);
+      DrillRel drel = convertToDrel(relScan, drillSchema, analyzeTableName);
       log("Drill Logical", drel);
       
       Prel prel = convertToPrel(drel);
@@ -125,14 +130,14 @@ public class AnalyzeTableHandler extends DefaultSqlHandler {
     if (convertedRelNode instanceof DrillStoreRel) {
       throw new UnsupportedOperationException();
     } else {
-      DrillWriterRel writerRel = new DrillWriterRel(
+      RelNode writerRel = new DrillWriterRel(
               convertedRelNode.getCluster(),
               convertedRelNode.getTraitSet(),
               new DrillAnalyzeRel(
                       convertedRelNode.getCluster(),
                       convertedRelNode.getTraitSet(),
                       convertedRelNode),
-              schema.createTableStats(analyzeTableName));
+              schema.appendTableStats(analyzeTableName));
       return new DrillScreenRel(writerRel.getCluster(), writerRel.getTraitSet(), writerRel);
     }
   }

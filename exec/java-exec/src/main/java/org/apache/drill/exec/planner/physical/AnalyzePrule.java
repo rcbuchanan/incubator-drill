@@ -17,23 +17,14 @@
  */
 package org.apache.drill.exec.planner.physical;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.apache.drill.exec.planner.logical.DrillAnalyzeRel;
 import org.apache.drill.exec.planner.logical.DrillRel;
 import org.apache.drill.exec.planner.logical.RelOptHelper;
-import org.apache.drill.exec.planner.physical.AggPrelBase.OperatorPhase;
-import org.eigenbase.rel.InvalidRelException;
 import org.eigenbase.rel.RelNode;
-import org.eigenbase.rel.RelWriter;
 import org.eigenbase.rel.SingleRel;
-import org.eigenbase.relopt.RelOptCluster;
 import org.eigenbase.relopt.RelOptRule;
 import org.eigenbase.relopt.RelOptRuleCall;
 import org.eigenbase.relopt.RelTraitSet;
-import org.eigenbase.reltype.RelDataType;
-import org.eigenbase.rex.RexNode;
 
 public class AnalyzePrule extends Prule {
   public static final RelOptRule INSTANCE = new AnalyzePrule();
@@ -45,6 +36,7 @@ public class AnalyzePrule extends Prule {
 
   @Override
   public void onMatch(RelOptRuleCall call) {
+    final String [] funcs = {"count", "hll"};
     final DrillAnalyzeRel analyze = (DrillAnalyzeRel) call.rel(0);
     final RelNode input = call.rel(1);
     
@@ -52,22 +44,9 @@ public class AnalyzePrule extends Prule {
 
     final RelTraitSet traits = input.getTraitSet().plus(Prel.DRILL_PHYSICAL).plus(DrillDistributionTrait.SINGLETON);
     final RelNode convertedInput = convert(input, traits);
-    SingleRel newAnalyze = null;
-    try {
-      newAnalyze = /*new UnpivotPrel(
-          analyze.getCluster(),
-          analyze.getTraitSet().plus(Prel.DRILL_PHYSICAL).plus(DrillDistributionTrait.SINGLETON),*/
-          new StatsAggPrel(
-              analyze.getCluster(),
-              analyze.getTraitSet().plus(Prel.DRILL_PHYSICAL).plus(DrillDistributionTrait.SINGLETON),
-              convertedInput,
-              OperatorPhase.PHASE_1of1)/*,
-          new ArrayList<RexNode>(),
-          analyze.getRowType())*/;
-    } catch (InvalidRelException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
-    }
+    SingleRel newAnalyze = new UnpivotStatsPrel(
+        new StatsAggPrel(convertedInput, analyze.getCluster(), funcs),
+        analyze.getCluster());
     call.transformTo(newAnalyze);
   }
 
