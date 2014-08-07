@@ -39,12 +39,14 @@ public class ParquetWriter extends AbstractWriter {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ParquetWriter.class);
 
   private final String location;
+  private final boolean append;
   private final ParquetFormatPlugin formatPlugin;
 
   @JsonCreator
   public ParquetWriter(
           @JsonProperty("child") PhysicalOperator child,
           @JsonProperty("location") String location,
+          @JsonProperty("append") boolean append,
           @JsonProperty("storage") StoragePluginConfig storageConfig,
           @JacksonInject StoragePluginRegistry engineRegistry) throws IOException, ExecutionSetupException {
 
@@ -52,20 +54,28 @@ public class ParquetWriter extends AbstractWriter {
     this.formatPlugin = (ParquetFormatPlugin) engineRegistry.getFormatPlugin(storageConfig, new ParquetFormatConfig());
     Preconditions.checkNotNull(formatPlugin, "Unable to load format plugin for provided format config.");
     this.location = location;
+    this.append = append;
   }
 
   public ParquetWriter(PhysicalOperator child,
                        String location,
+                       boolean append,
                        ParquetFormatPlugin formatPlugin) {
 
     super(child);
     this.formatPlugin = formatPlugin;
     this.location = location;
+    this.append = append;
   }
 
   @JsonProperty("location")
   public String getLocation() {
     return location;
+  }
+  
+  @JsonProperty("append")
+  public boolean getAppend() {
+    return append;
   }
 
   @JsonProperty("storage")
@@ -85,7 +95,7 @@ public class ParquetWriter extends AbstractWriter {
 
   @Override
   protected PhysicalOperator getNewWithChild(PhysicalOperator child) {
-    return new ParquetWriter(child, location, formatPlugin);
+    return new ParquetWriter(child, location, append, formatPlugin);
   }
 
   @Override

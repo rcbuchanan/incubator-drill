@@ -272,12 +272,24 @@ public class WorkspaceSchemaFactory implements ExpandingConcurrentMap.MapValueFa
     public String getDefaultLocation() {
       return config.getLocation();
     }
-
-
+    
+    @Override
+    public CreateTableEntry appendToTable(String tableName) {
+      DrillTable tab = tables.get(tableName);
+      System.out.println(tab == null ? null : tab.getStorageEngineName());
+      FormatPlugin formatPlugin = plugin.getFormatPlugin("json");
+      return createOrAppendToTable(tableName, true, formatPlugin);
+    }
+    
     @Override
     public CreateTableEntry createNewTable(String tableName) {
       String storage = session.getOptions().getOption(ExecConstants.OUTPUT_FORMAT_OPTION).string_val;
       FormatPlugin formatPlugin = plugin.getFormatPlugin(storage);
+      
+      return createOrAppendToTable(tableName, false, formatPlugin);
+    }
+    
+    private CreateTableEntry createOrAppendToTable(String tableName, boolean append, FormatPlugin formatPlugin) {
       if (formatPlugin == null)
         throw new UnsupportedOperationException(
           String.format("Unsupported format '%s' in workspace '%s'", config.getStorageFormat(),
@@ -286,7 +298,8 @@ public class WorkspaceSchemaFactory implements ExpandingConcurrentMap.MapValueFa
       return new FileSystemCreateTableEntry(
           (FileSystemConfig) plugin.getConfig(),
           formatPlugin,
-          config.getLocation() + Path.SEPARATOR + tableName);
+          config.getLocation() + Path.SEPARATOR + tableName,
+          append);
     }
 
     @Override

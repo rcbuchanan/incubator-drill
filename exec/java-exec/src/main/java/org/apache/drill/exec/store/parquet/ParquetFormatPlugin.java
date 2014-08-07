@@ -114,14 +114,15 @@ public class ParquetFormatPlugin implements FormatPlugin{
   }
 
   @Override
-  public AbstractWriter getWriter(PhysicalOperator child, String location) throws IOException {
-    return new ParquetWriter(child, location, this);
+  public AbstractWriter getWriter(PhysicalOperator child, String location, boolean append) throws IOException {
+    return new ParquetWriter(child, location, append, this);
   }
 
   public RecordWriter getRecordWriter(FragmentContext context, ParquetWriter writer) throws IOException {
     Map<String, String> options = Maps.newHashMap();
 
     options.put("location", writer.getLocation());
+    options.put("append", Boolean.toString(writer.getAppend()));
 
     FragmentHandle handle = context.getHandle();
     String fragmentId = String.format("%d_%d", handle.getMajorFragmentId(), handle.getMinorFragmentId());
