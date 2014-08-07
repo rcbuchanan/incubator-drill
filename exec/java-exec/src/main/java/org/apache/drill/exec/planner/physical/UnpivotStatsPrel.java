@@ -25,30 +25,32 @@ import java.util.List;
 
 import org.apache.drill.exec.physical.base.PhysicalOperator;
 import org.apache.drill.exec.physical.config.SelectionVectorRemover;
-import org.apache.drill.exec.physical.config.StatsPivot;
+import org.apache.drill.exec.physical.config.UnpivotStats;
 import org.apache.drill.exec.planner.common.DrillProjectRelBase;
+import org.apache.drill.exec.planner.common.DrillRelNode;
 import org.apache.drill.exec.planner.logical.DrillParseContext;
 import org.apache.drill.exec.planner.physical.visitor.PrelVisitor;
 import org.apache.drill.exec.record.BatchSchema.SelectionVectorMode;
 import org.eigenbase.rel.ProjectRelBase;
 import org.eigenbase.rel.RelNode;
 import org.eigenbase.rel.RelWriter;
+import org.eigenbase.rel.SingleRel;
 import org.eigenbase.relopt.RelOptCluster;
 import org.eigenbase.relopt.RelTraitSet;
 import org.eigenbase.reltype.RelDataType;
 import org.eigenbase.rex.RexNode;
 
-public class UnpivotPrel extends DrillProjectRelBase implements Prel{
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(UnpivotPrel.class);
+public class UnpivotStatsPrel extends SingleRel implements Prel, DrillRelNode {
+  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(UnpivotStatsPrel.class);
 
 
-  public UnpivotPrel(RelOptCluster cluster, RelTraitSet traits, RelNode child, List<RexNode> exps,
-      RelDataType rowType) {
-    super(DRILL_PHYSICAL, cluster, traits, child, exps, rowType);
+  public UnpivotStatsPrel(RelNode child, RelOptCluster cluster) {
+    super(cluster, child.getTraitSet(), child);
   }
 
-  public UnpivotPrel copy(RelTraitSet traitSet, RelNode input, List<RexNode> exps, RelDataType rowType) {
-    return new UnpivotPrel(getCluster(), traitSet, input, exps, rowType);
+  @Override
+  public RelNode copy(RelTraitSet traitSet, List<RelNode> inputs) {
+    return new UnpivotStatsPrel(sole(inputs), getCluster());
   }
 
   public RelWriter explainTerms(RelWriter pw) {
@@ -62,7 +64,7 @@ public class UnpivotPrel extends DrillProjectRelBase implements Prel{
 
     PhysicalOperator childPOP = child.getPhysicalOperator(creator);
 
-    StatsPivot sp = new StatsPivot(this.getProjectExpressions(new DrillParseContext()),  childPOP);
+    UnpivotStats sp = new UnpivotStats(childPOP);
     return creator.addMetadata(this, sp);
   }
 

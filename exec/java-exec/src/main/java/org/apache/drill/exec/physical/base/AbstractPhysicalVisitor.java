@@ -31,7 +31,7 @@ import org.apache.drill.exec.physical.config.OrderedPartitionSender;
 import org.apache.drill.exec.physical.config.ProducerConsumer;
 import org.apache.drill.exec.physical.config.Project;
 import org.apache.drill.exec.physical.config.StatisticsAggregate;
-import org.apache.drill.exec.physical.config.StatsPivot;
+import org.apache.drill.exec.physical.config.UnpivotStats;
 import org.apache.drill.exec.physical.config.UnorderedReceiver;
 import org.apache.drill.exec.physical.config.RangeSender;
 import org.apache.drill.exec.physical.config.Screen;
@@ -204,7 +204,7 @@ public abstract class AbstractPhysicalVisitor<T, X, E extends Throwable> impleme
   }
   
   @Override
-  public T visitStatsPivot(StatsPivot op, X value) throws E {
+  public T visitStatsPivot(UnpivotStats op, X value) throws E {
     return visitOp(op, value);
   }
 

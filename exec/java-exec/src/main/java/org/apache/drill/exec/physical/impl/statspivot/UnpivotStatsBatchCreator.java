@@ -19,18 +19,21 @@ package org.apache.drill.exec.physical.impl.statspivot;
 
 import java.util.List;
 
-import org.apache.drill.exec.compile.TemplateClassDefinition;
-import org.apache.drill.exec.exception.SchemaChangeException;
+import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.exec.ops.FragmentContext;
+import org.apache.drill.exec.physical.config.UnpivotStats;
+import org.apache.drill.exec.physical.impl.BatchCreator;
 import org.apache.drill.exec.record.RecordBatch;
-import org.apache.drill.exec.record.TransferPair;
 
-public interface StatsPivotor {
+import com.google.common.base.Preconditions;
 
-  public abstract int getRecordsPerRecord();
-  public abstract void setup(FragmentContext context, RecordBatch incoming,  RecordBatch outgoing, List<TransferPair> transfers, int recordsPerRecord)  throws SchemaChangeException;
-  public abstract int pivotRecords(int startIndex, int recordCount, int firstOutputIndex);
+public class UnpivotStatsBatchCreator implements BatchCreator<UnpivotStats>{
+  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(UnpivotStatsBatchCreator.class);
 
-  public static TemplateClassDefinition<StatsPivotor> TEMPLATE_DEFINITION = new TemplateClassDefinition<StatsPivotor>(StatsPivotor.class, StatsPivotTemplate.class);
+  @Override
+  public RecordBatch getBatch(FragmentContext context, UnpivotStats config, List<RecordBatch> children) throws ExecutionSetupException {
+    Preconditions.checkArgument(children.size() == 1);
+    return new UnpivotStatsRecordBatch(config, children.iterator().next(), context);
+  }
 
 }

@@ -49,7 +49,7 @@ import org.apache.drill.exec.expr.TypeHelper;
 import org.apache.drill.exec.expr.ValueVectorWriteExpression;
 import org.apache.drill.exec.memory.OutOfMemoryException;
 import org.apache.drill.exec.ops.FragmentContext;
-import org.apache.drill.exec.physical.config.StatsPivot;
+import org.apache.drill.exec.physical.config.UnpivotStats;
 import org.apache.drill.exec.record.AbstractSingleRecordBatch;
 import org.apache.drill.exec.record.BatchSchema.SelectionVectorMode;
 import org.apache.drill.exec.record.MaterializedField;
@@ -67,17 +67,17 @@ import com.google.common.collect.Maps;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JExpr;
 
-public class StatsPivotRecordBatch extends AbstractSingleRecordBatch<StatsPivot>{
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StatsPivotRecordBatch.class);
+public class UnpivotStatsRecordBatch extends AbstractSingleRecordBatch<UnpivotStats>{
+  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(UnpivotStatsRecordBatch.class);
 
-  private StatsPivotor statsPivotor;
+  private StatsUnpivotor statsPivotor;
   private List<ValueVector> allocationVectors;
   private List<ComplexWriter> complexWriters;
   private boolean hasRemainder = false;
   private int remainderIndex = 0;
   private int recordCount;
   
-  public StatsPivotRecordBatch(StatsPivot pop, RecordBatch incoming, FragmentContext context) throws OutOfMemoryException {
+  public UnpivotStatsRecordBatch(UnpivotStats pop, RecordBatch incoming, FragmentContext context) throws OutOfMemoryException {
     super(pop, context, incoming);
   }
 
@@ -243,7 +243,7 @@ public class StatsPivotRecordBatch extends AbstractSingleRecordBatch<StatsPivot>
     return field;
   }
   
-  private void codegenAddExpression(ClassGenerator<StatsPivotor> cg, LogicalExpression expr, int subrecCount, int subrec) {
+  private void codegenAddExpression(ClassGenerator<StatsUnpivotor> cg, LogicalExpression expr, int subrecCount, int subrec) {
     HoldingContainer hc = cg.addExpr(expr, false);
     JBlock b = cg.getEvalBlock();
     cg.unNestEvalBlock();
@@ -290,7 +290,7 @@ public class StatsPivotRecordBatch extends AbstractSingleRecordBatch<StatsPivot>
     this.allocationVectors = Lists.newArrayList();
     container.clear();
     final List<TransferPair> transfers = Lists.newArrayList();
-    final ClassGenerator<StatsPivotor> cg = CodeGenerator.getRoot(StatsPivotor.TEMPLATE_DEFINITION, context.getFunctionRegistry());
+    final ClassGenerator<StatsUnpivotor> cg = CodeGenerator.getRoot(StatsUnpivotor.TEMPLATE_DEFINITION, context.getFunctionRegistry());
     final int inColCount = incoming.getSchema().getFieldCount();
     
     if(incoming.getSchema().getSelectionVectorMode() != SelectionVectorMode.NONE){
@@ -323,7 +323,7 @@ public class StatsPivotRecordBatch extends AbstractSingleRecordBatch<StatsPivot>
     
     // create output columns and fields
     List<MaterializedField> outFields = Lists.newArrayList();
-    outFields.add(addOutputCol("pivotedfrom", Types.required(MinorType.VARCHAR)));
+    outFields.add(addOutputCol("column", Types.required(MinorType.VARCHAR)));
     for (int i = 0; i < colNames.size(); i++) {
       outFields.add(addOutputCol(colNames.get(i), colTypes.get(i)));
     }

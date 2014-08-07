@@ -30,20 +30,13 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
 
-@JsonTypeName("stats-pivot")
-public class StatsPivot extends AbstractSingle{
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StatsPivot.class);
-
-  private final List<NamedExpression> exprs;
+@JsonTypeName("unpivot-stats")
+public class UnpivotStats extends AbstractSingle{
+  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(UnpivotStats.class);
 
   @JsonCreator
-  public StatsPivot(@JsonProperty("exprs") List<NamedExpression> exprs, @JsonProperty("child") PhysicalOperator child) {
+  public UnpivotStats(@JsonProperty("child") PhysicalOperator child) {
     super(child);
-    this.exprs = exprs;
-  }
-
-  public List<NamedExpression> getExprs() {
-    return exprs;
   }
 
   @Override
@@ -53,7 +46,7 @@ public class StatsPivot extends AbstractSingle{
 
   @Override
   protected PhysicalOperator getNewWithChild(PhysicalOperator child) {
-    return new StatsPivot(exprs, child);
+    return new UnpivotStats(child);
   }
 
   @Override

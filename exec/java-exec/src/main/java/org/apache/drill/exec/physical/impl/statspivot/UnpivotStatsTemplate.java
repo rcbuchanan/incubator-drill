@@ -31,8 +31,8 @@ import org.apache.drill.exec.record.selection.SelectionVector4;
 
 import com.google.common.collect.ImmutableList;
 
-public abstract class StatsPivotTemplate implements StatsPivotor {
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StatsPivotTemplate.class);
+public abstract class UnpivotStatsTemplate implements StatsUnpivotor {
+  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(UnpivotStatsTemplate.class);
 
   private ImmutableList<TransferPair> transfers;
   private SelectionVector2 vector2;
@@ -40,7 +40,7 @@ public abstract class StatsPivotTemplate implements StatsPivotor {
   private SelectionVectorMode svMode;
   private int recordsPerRecord;
 
-  public StatsPivotTemplate() throws SchemaChangeException{
+  public UnpivotStatsTemplate() throws SchemaChangeException{
   }
 
   @Override
