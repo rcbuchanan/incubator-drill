@@ -208,11 +208,18 @@ public class ParquetFormatPlugin implements FormatPlugin{
     @Override
     public FormatSelection isReadable(FileSelection selection) throws IOException {
       // TODO: we only check the first file for directory reading.  This is because 
+      for (String s : selection.getAsFiles()) {
+        System.out.println(s);
+      }
+      System.out.println(selection.containsDirectories(fs));
       if(selection.containsDirectories(fs)){
         if(isDirReadable(selection.getFirstPath(fs))){
           return new FormatSelection(plugin.getConfig(), selection);
         }
       }
+      
+      if (!super.supportDirectoryReads() && selection.containsDirectories(fs))
+        return null;
       return super.isReadable(selection);
     }
     
