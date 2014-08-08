@@ -150,6 +150,30 @@ public class StatisticsAggrFunctions {
     }
   }
   
+  @FunctionTemplate(name = "count", scope = FunctionTemplate.FunctionScope.POINT_AGGREGATE)
+  public static class CountDummy implements DrillAggFunc {
+    @Param FieldReader in;
+    @Workspace ObjectHolder work;
+    @Output NullableBigIntHolder out;
+
+    public void setup(RecordBatch b) {
+    }
+
+    @Override
+    public void add() {
+    }
+
+    @Override
+    public void output() {
+      out.isSet = 0;
+      out.value = 0;
+    }
+
+    @Override
+    public void reset() {
+    }
+  }
+  
   @FunctionTemplate(name = "hll", scope = FunctionTemplate.FunctionScope.POINT_AGGREGATE)
   public static class HllDummy implements DrillAggFunc {
     @Param FieldReader in;
