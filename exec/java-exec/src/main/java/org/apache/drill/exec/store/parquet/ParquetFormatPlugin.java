@@ -212,6 +212,9 @@ public class ParquetFormatPlugin implements FormatPlugin{
           return new FormatSelection(plugin.getConfig(), selection);
         }
       }
+      
+      if (!super.supportDirectoryReads() && selection.containsDirectories(fs))
+        return null;
       return super.isReadable(selection);
     }
     
