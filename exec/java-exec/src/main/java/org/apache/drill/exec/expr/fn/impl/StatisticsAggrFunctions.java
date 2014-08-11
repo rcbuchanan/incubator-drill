@@ -23,6 +23,9 @@
 
 package org.apache.drill.exec.expr.fn.impl;
 
+import org.apache.drill.common.types.TypeProtos.DataMode;
+import org.apache.drill.common.types.TypeProtos.MajorType;
+import org.apache.drill.common.types.TypeProtos.MinorType;
 import org.apache.drill.exec.expr.DrillAggFunc;
 import org.apache.drill.exec.expr.DrillSimpleFunc;
 import org.apache.drill.exec.expr.annotations.FunctionTemplate;
@@ -40,6 +43,8 @@ import org.apache.drill.exec.expr.holders.NullableIntHolder;
 import org.apache.drill.exec.expr.holders.NullableVarBinaryHolder;
 import org.apache.drill.exec.expr.holders.NullableVarCharHolder;
 import org.apache.drill.exec.expr.holders.ObjectHolder;
+import org.apache.drill.exec.expr.holders.RepeatedVarBinaryHolder;
+import org.apache.drill.exec.expr.holders.RepeatedVarCharHolder;
 import org.apache.drill.exec.expr.holders.SmallIntHolder;
 import org.apache.drill.exec.expr.holders.NullableSmallIntHolder;
 import org.apache.drill.exec.expr.holders.TinyIntHolder;
@@ -53,6 +58,7 @@ import org.apache.drill.exec.expr.holders.NullableUInt4Holder;
 import org.apache.drill.exec.expr.holders.UInt8Holder;
 import org.apache.drill.exec.expr.holders.NullableUInt8Holder;
 import org.apache.drill.exec.expr.holders.VarBinaryHolder;
+import org.apache.drill.exec.expr.holders.VarCharHolder;
 import org.apache.drill.exec.record.RecordBatch;
 import org.apache.drill.exec.vector.complex.reader.FieldReader;
 
@@ -62,9 +68,64 @@ import com.clearspring.analytics.stream.cardinality.HyperLogLog;
 public class StatisticsAggrFunctions {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StatisticsAggrFunctions.class);
 
+  @FunctionTemplate(name = "statcount", scope = FunctionTemplate.FunctionScope.POINT_AGGREGATE)
+  public static class StatCount implements DrillAggFunc {
+    @Param FieldReader in;
+    @Workspace BigIntHolder count;
+    @Output NullableBigIntHolder out;
+
+    public void setup(RecordBatch b) {
+      count = new BigIntHolder();
+    }
+
+    @Override
+    public void add() {
+      count.value++;
+    }
+
+    @Override
+    public void output() {
+      out.isSet = 1;
+      out.value = count.value;
+    }
+
+    @Override
+    public void reset() {
+      count.value = 0;
+    }
+  }
+  
+  @FunctionTemplate(name = "nonnullstatcount", scope = FunctionTemplate.FunctionScope.POINT_AGGREGATE)
+  public static class NonNullStatCount implements DrillAggFunc {
+    @Param FieldReader in;
+    @Workspace BigIntHolder count;
+    @Output NullableBigIntHolder out;
+
+    public void setup(RecordBatch b) {
+      count = new BigIntHolder();
+    }
+
+    @Override
+    public void add() {
+      if (in.isSet())
+        count.value++;
+    }
+
+    @Override
+    public void output() {
+      out.isSet = 1;
+      out.value = count.value;
+    }
+
+    @Override
+    public void reset() {
+      count.value = 0;
+    }
+  }
+  
   @FunctionTemplate(name = "hll", scope = FunctionTemplate.FunctionScope.POINT_AGGREGATE)
-  public static class HllNullableVarBinary implements DrillAggFunc {
-    @Param NullableVarBinaryHolder in;
+  public static class HllFieldReader implements DrillAggFunc {
+    @Param FieldReader in;
     @Workspace ObjectHolder work;
     @Output NullableVarBinaryHolder out;
 
@@ -75,30 +136,51 @@ public class StatisticsAggrFunctions {
 
     @Override
     public void add() {
-      com.clearspring.analytics.stream.cardinality.HyperLogLog hll =
-          (com.clearspring.analytics.stream.cardinality.HyperLogLog) work.obj;
-      if (in.isSet()) {
-        byte [] d = new byte[in.end - in.start]; 
-        in.buffer.getBytes(in.start, d);
-        hll.offer(d);
+      if (work.obj != null) {
+        com.clearspring.analytics.stream.cardinality.HyperLogLog hll =
+            (com.clearspring.analytics.stream.cardinality.HyperLogLog) work.obj;
+        int mode = in.getType().getMode().getNumber();
+        int type = in.getType().getMinorType().getNumber();
+        
+        switch (mode) {
+        case org.apache.drill.common.types.TypeProtos.DataMode.OPTIONAL_VALUE:
+          if (!in.isSet()) {
+            hll.offer(null);
+            break;
+          }
+        // fall through //
+        case org.apache.drill.common.types.TypeProtos.DataMode.REQUIRED_VALUE:
+          switch (type) {
+          case org.apache.drill.common.types.TypeProtos.MinorType.VARCHAR_VALUE:
+            hll.offer(in.readText().toString());
+            break;
+          default:
+            work.obj = null;
+          }
+          break;
+        default:
+          work.obj = null;
+        }
+      }
+    }
+
+    @Override
+    public void output() {
+      if (work.obj != null) {
+        com.clearspring.analytics.stream.cardinality.HyperLogLog hll =
+            (com.clearspring.analytics.stream.cardinality.HyperLogLog) work.obj;
+  
+        try {
+          byte [] ba = hll.getBytes();
+          out.buffer = io.netty.buffer.Unpooled.wrappedBuffer(ba);
+          out.start = 0;
+          out.end = ba.length;
+          out.isSet = 1;
+        } catch (java.io.IOException e) {
+          e.printStackTrace();
+        }
       } else {
-        hll.offer(null);
-      }
-    }
-
-    @Override
-    public void output() {
-      com.clearspring.analytics.stream.cardinality.HyperLogLog hll =
-          (com.clearspring.analytics.stream.cardinality.HyperLogLog) work.obj;
-
-      try {
-        byte [] ba = hll.getBytes();
-        out.buffer = io.netty.buffer.Unpooled.wrappedBuffer(ba);
-        out.start = 0;
-        out.end = ba.length;
-        out.isSet = 1;
-      } catch (java.io.IOException e) {
-        e.printStackTrace();
+        out.isSet = 0;
       }
     }
 
@@ -108,105 +190,77 @@ public class StatisticsAggrFunctions {
     }
   }
   
-  @FunctionTemplate(name = "hll", scope = FunctionTemplate.FunctionScope.POINT_AGGREGATE)
-  public static class HllVarBinary implements DrillAggFunc {
-    @Param VarBinaryHolder in;
-    @Workspace ObjectHolder work;
-    @Output NullableVarBinaryHolder out;
-
-    public void setup(RecordBatch b) {
-      work = new ObjectHolder();
-      work.obj = new com.clearspring.analytics.stream.cardinality.HyperLogLog(10);
-    }
-
-    @Override
-    public void add() {
-      com.clearspring.analytics.stream.cardinality.HyperLogLog hll =
-          (com.clearspring.analytics.stream.cardinality.HyperLogLog) work.obj;
-      byte [] d = new byte[in.end - in.start]; 
-      in.buffer.getBytes(in.start, d);
-      hll.offer(d);
-    }
-
-    @Override
-    public void output() {
-      com.clearspring.analytics.stream.cardinality.HyperLogLog hll =
-          (com.clearspring.analytics.stream.cardinality.HyperLogLog) work.obj;
-
-      try {
-        byte [] ba = hll.getBytes();
-        out.buffer = io.netty.buffer.Unpooled.wrappedBuffer(ba);
-        out.start = 0;
-        out.end = ba.length;
-        out.isSet = 1;
-      } catch (java.io.IOException e) {
-        e.printStackTrace();
-      }
-    }
-
-    @Override
-    public void reset() {
-      work.obj = new com.clearspring.analytics.stream.cardinality.HyperLogLog(10);
-    }
-  }
   
-  @FunctionTemplate(name = "count", scope = FunctionTemplate.FunctionScope.POINT_AGGREGATE)
-  public static class CountDummy implements DrillAggFunc {
+  @FunctionTemplate(name = "ndv", scope = FunctionTemplate.FunctionScope.POINT_AGGREGATE)
+  public static class NdvVarBinary implements DrillAggFunc {
     @Param FieldReader in;
     @Workspace ObjectHolder work;
     @Output NullableBigIntHolder out;
 
     public void setup(RecordBatch b) {
+      work = new ObjectHolder();
+      work.obj = new com.clearspring.analytics.stream.cardinality.HyperLogLog(10);
     }
 
     @Override
     public void add() {
+      if (work.obj != null) {
+        com.clearspring.analytics.stream.cardinality.HyperLogLog hll =
+            (com.clearspring.analytics.stream.cardinality.HyperLogLog) work.obj;
+        int mode = in.getType().getMode().getNumber();
+        int type = in.getType().getMinorType().getNumber();
+        
+        switch (mode) {
+        case org.apache.drill.common.types.TypeProtos.DataMode.OPTIONAL_VALUE:
+          if (!in.isSet()) {
+            hll.offer(null);
+            break;
+          }
+        // fall through //
+        case org.apache.drill.common.types.TypeProtos.DataMode.REQUIRED_VALUE:
+          switch (type) {
+          case org.apache.drill.common.types.TypeProtos.MinorType.VARCHAR_VALUE:
+            hll.offer(in.readText().toString());
+            break;
+          default:
+            work.obj = null;
+          }
+          break;
+        default:
+          work.obj = null;
+        }
+      }
     }
 
     @Override
     public void output() {
-      out.isSet = 0;
-      out.value = 0;
+      if (work.obj != null) {
+        com.clearspring.analytics.stream.cardinality.HyperLogLog hll =
+            (com.clearspring.analytics.stream.cardinality.HyperLogLog) work.obj;
+  
+        out.isSet = 1;
+        out.value = hll.cardinality();
+      } else {
+        out.isSet = 0;
+      }
     }
 
     @Override
     public void reset() {
+      work.obj = new com.clearspring.analytics.stream.cardinality.HyperLogLog(10);
     }
   }
   
-  @FunctionTemplate(name = "hll", scope = FunctionTemplate.FunctionScope.POINT_AGGREGATE)
-  public static class HllDummy implements DrillAggFunc {
-    @Param FieldReader in;
-    @Workspace ObjectHolder work;
-    @Output NullableVarBinaryHolder out;
-
-    public void setup(RecordBatch b) {
-    }
-
-    @Override
-    public void add() {
-    }
-
-    @Override
-    public void output() {
-      out.start = out.end = out.isSet = 0;
-      out.buffer = null;
-    }
-
-    @Override
-    public void reset() {
-    }
-  }
   
   @FunctionTemplate(name = "hll_decode", scope = FunctionScope.SIMPLE, nulls = NullHandling.NULL_IF_NULL)
   public static class HllDecode implements DrillSimpleFunc {
-
+  
     @Param NullableVarBinaryHolder in;
     @Output BigIntHolder out;
-
+  
     public void setup(RecordBatch incoming){
     }
-
+  
     public void eval(){
       out.value = -1;
       
@@ -221,6 +275,5 @@ public class StatisticsAggrFunctions {
       }
     }
   }
-
 
 }
