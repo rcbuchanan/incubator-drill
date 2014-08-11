@@ -65,7 +65,7 @@ public class HBasePushFilterIntoScan extends StoragePluginOptimizerRule {
     final HBaseGroupScan newGroupsScan = new HBaseGroupScan(groupScan.getStoragePlugin(), newScanSpec, groupScan.getColumns());
     newGroupsScan.setFilterPushedDown(true);
 
-    final ScanPrel newScanPrel = ScanPrel.create(scan, filter.getTraitSet(), newGroupsScan, scan.getRowType());
+    final ScanPrel newScanPrel = ScanPrel.create(scan, filter.getTraitSet(), scan.getDrillTable(), newGroupsScan, scan.getRowType());
     if (hbaseFilterBuilder.isAllExpressionsConverted()) {
       /*
        * Since we could convert the entire filter condition expression into an HBase filter,

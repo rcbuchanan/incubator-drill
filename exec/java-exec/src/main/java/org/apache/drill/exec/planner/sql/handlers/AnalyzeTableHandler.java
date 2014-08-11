@@ -80,12 +80,12 @@ public class AnalyzeTableHandler extends DefaultSqlHandler {
       RelNode relScan = convertToRel(validated);
 
       // don't analyze all columns
-      List<String> analyzeFields = sqlAnalyzeTable.getFieldNames();
-      if (analyzeFields.size() > 0) {
-        RelDataType rowType = new DrillFixedRelDataTypeImpl(
-            planner.getTypeFactory(), analyzeFields);
-        relScan = RelOptUtil.createCastRel(relScan, rowType, true);
-      }
+//      List<String> analyzeFields = sqlAnalyzeTable.getFieldNames();
+//      if (analyzeFields.size() > 0) {
+//        RelDataType rowType = new DrillFixedRelDataTypeImpl(
+//            planner.getTypeFactory(), analyzeFields);
+//        relScan = RelOptUtil.createCastRel(relScan, rowType, true);
+//      }
       
       
       SchemaPlus schema = findSchema(
@@ -101,11 +101,6 @@ public class AnalyzeTableHandler extends DefaultSqlHandler {
       
       String analyzeTableName = sqlAnalyzeTable.getName();
       
-      // TODO: join or something if stats have already been computed
-      if (drillSchema.getTableStatsTable(analyzeTableName) != null) {
-        return DirectPlan.createDirectPlan(context, false, 
-            String.format("Table '%s' has already been analyzed!.", analyzeTableName));
-      }
       // Convert the query to Drill Logical plan and insert a writer operator on top.
       DrillRel drel = convertToDrel(relScan, drillSchema, analyzeTableName);
       log("Drill Logical", drel);

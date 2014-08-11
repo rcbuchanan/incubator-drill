@@ -26,6 +26,7 @@ import org.apache.drill.exec.physical.base.GroupScan;
 import org.apache.drill.exec.planner.logical.DrillAggregateRel;
 import org.apache.drill.exec.planner.logical.DrillProjectRel;
 import org.apache.drill.exec.planner.logical.DrillScanRel;
+import org.apache.drill.exec.planner.logical.DrillTable;
 import org.apache.drill.exec.planner.logical.RelOptHelper;
 import org.apache.drill.exec.planner.physical.DrillDistributionTrait;
 import org.apache.drill.exec.planner.physical.Prel;
@@ -128,9 +129,12 @@ public class ConvertCountToDirectScan extends Prule {
       }
 
       RelDataType scanRowType = getCountDirectScanRowType(agg.getCluster().getTypeFactory());
+      
+      DrillTable table = scan.getDrillTable();
 
       final ScanPrel newScan = ScanPrel.create(scan,
-          scan.getTraitSet().plus(Prel.DRILL_PHYSICAL).plus(DrillDistributionTrait.SINGLETON), getCountDirectScan(cnt),
+          scan.getTraitSet().plus(Prel.DRILL_PHYSICAL).plus(DrillDistributionTrait.SINGLETON),
+          table, getCountDirectScan(cnt),
           scanRowType);
 
       List<RexNode> exprs = Lists.newArrayList();

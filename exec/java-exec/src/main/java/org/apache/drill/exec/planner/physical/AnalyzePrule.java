@@ -36,11 +36,9 @@ public class AnalyzePrule extends Prule {
 
   @Override
   public void onMatch(RelOptRuleCall call) {
-    final String [] funcs = {"count", "hll"};
+    final String [] funcs = {"statcount", "nonnullstatcount", "ndv", "hll"};
     final DrillAnalyzeRel analyze = (DrillAnalyzeRel) call.rel(0);
     final RelNode input = call.rel(1);
-    
-    System.out.println("MATCHES!!!");
 
     final RelTraitSet traits = input.getTraitSet().plus(Prel.DRILL_PHYSICAL).plus(DrillDistributionTrait.SINGLETON);
     final RelNode convertedInput = convert(input, traits);

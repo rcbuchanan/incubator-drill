@@ -35,6 +35,7 @@ import org.apache.drill.exec.dotdrill.DotDrillFile;
 import org.apache.drill.exec.dotdrill.DotDrillType;
 import org.apache.drill.exec.dotdrill.DotDrillUtil;
 import org.apache.drill.exec.dotdrill.View;
+import org.apache.drill.exec.planner.common.DrillTableMetadata;
 import org.apache.drill.exec.planner.logical.CreateTableEntry;
 import org.apache.drill.exec.planner.logical.DrillTable;
 import org.apache.drill.exec.planner.logical.DrillViewTable;
@@ -237,7 +238,10 @@ public class WorkspaceSchemaFactory implements ExpandingConcurrentMap.MapValueFa
     @Override
     public Table getTable(String name) {
       // first check existing tables.
-      if(tables.alreadyContainsKey(name)) return tables.get(name);
+      if(tables.alreadyContainsKey(name)) {
+        tables.get(name).setDrillTableMetadata(new DrillTableMetadata(getTableStatsTable(name), getTableStatsTableString(name)));
+        return tables.get(name);
+      }
 
       // then check known views.
 //      String path = knownViews.get(name);
@@ -256,6 +260,9 @@ public class WorkspaceSchemaFactory implements ExpandingConcurrentMap.MapValueFa
         logger.warn("Failure while trying to load .drill file.", e);
       }
 
+      if (tables.alreadyContainsKey(name)) {
+        tables.get(name).setDrillTableMetadata(new DrillTableMetadata(getTableStatsTable(name), getTableStatsTableString(name)));
+      }
       return tables.get(name);
 
     }
@@ -275,8 +282,6 @@ public class WorkspaceSchemaFactory implements ExpandingConcurrentMap.MapValueFa
     
     @Override
     public CreateTableEntry appendToTable(String tableName) {
-      DrillTable tab = tables.get(tableName);
-      System.out.println(tab == null ? null : tab.getStorageEngineName());
       FormatPlugin formatPlugin = plugin.getFormatPlugin("json");
       return createOrAppendToTable(tableName, true, formatPlugin);
     }

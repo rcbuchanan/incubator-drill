@@ -125,8 +125,12 @@ public abstract class AbstractSchema implements Schema{
   }
   
   public Table getTableStatsTable(String name) {
-    return name.endsWith(".stats.drill") ?
-        getTable(name + ".stats.drill") : null;
+    return !name.endsWith(".stats.drill") ?
+            getTable(name + ".stats.drill") : null;
+  }
+  
+  public String getTableStatsTableString(String name) {
+    return !name.endsWith(".stats.drill") ? getFullSchemaName() + ".`" + name + ".stats.drill`" : null;
   }
 
   @Override
