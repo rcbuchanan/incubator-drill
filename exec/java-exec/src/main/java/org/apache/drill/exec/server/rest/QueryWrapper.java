@@ -92,7 +92,7 @@ public class QueryWrapper {
   }
 
 
-  private static class Listener implements UserResultsListener {
+  public static class Listener implements UserResultsListener {
     private volatile Exception exception;
     private AtomicInteger count = new AtomicInteger();
     private CountDownLatch latch = new CountDownLatch(1);
@@ -101,7 +101,7 @@ public class QueryWrapper {
     private RecordBatchLoader loader;
     private boolean schemaAdded = false;
 
-    Listener(RecordBatchLoader loader) {
+    public Listener(RecordBatchLoader loader) {
       this.loader = loader;
     }
 
@@ -135,7 +135,9 @@ public class QueryWrapper {
           for (VectorWrapper<?> vw : loader) {
             ValueVector.Accessor accessor = vw.getValueVector().getAccessor();
             Object object = accessor.getObject(i);
-            if (! object.getClass().getName().startsWith("java.lang")) {
+            if ( object == null) {
+              object = null;
+            } else if (! object.getClass().getName().startsWith("java.lang")) {
               object = object.toString();
             }
             record.put(columnNames.get(j), object);
