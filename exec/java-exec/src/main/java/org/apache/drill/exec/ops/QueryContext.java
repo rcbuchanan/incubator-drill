@@ -64,6 +64,10 @@ public class QueryContext{
   public PStoreProvider getPersistentStoreProvider(){
     return drillbitContext.getPersistentStoreProvider();
   }
+  
+  public DrillbitContext getDrillbitContext(){
+    return drillbitContext;
+  }
 
   public PlannerSettings getPlannerSettings(){
     return plannerSettings;
