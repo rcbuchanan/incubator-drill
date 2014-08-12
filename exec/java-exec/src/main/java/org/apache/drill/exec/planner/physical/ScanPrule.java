@@ -22,6 +22,7 @@ import java.util.List;
 import org.apache.drill.common.expression.SchemaPath;
 import org.apache.drill.exec.physical.base.GroupScan;
 import org.apache.drill.exec.planner.logical.DrillScanRel;
+import org.apache.drill.exec.planner.logical.DrillTable;
 import org.apache.drill.exec.planner.logical.RelOptHelper;
 import org.eigenbase.relopt.RelOptRule;
 import org.eigenbase.relopt.RelOptRuleCall;
@@ -44,7 +45,9 @@ public class ScanPrule extends Prule{
 
     final RelTraitSet traits = scan.getTraitSet().plus(Prel.DRILL_PHYSICAL).plus(partition);
 
-    final DrillScanPrel newScan = ScanPrel.create(scan, traits, groupScan, scan.getRowType());
+    final DrillTable table = scan.getDrillTable();
+
+    final DrillScanPrel newScan = ScanPrel.create(scan, traits, table, groupScan, scan.getRowType());
 
     call.transformTo(newScan);
   }
