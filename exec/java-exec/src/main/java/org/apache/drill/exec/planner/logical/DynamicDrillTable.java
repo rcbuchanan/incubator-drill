@@ -17,7 +17,7 @@
  */
 package org.apache.drill.exec.planner.logical;
 
-import org.apache.drill.common.logical.StoragePluginConfig;
+import org.apache.drill.exec.planner.common.DrillTableMetadata;
 import org.apache.drill.exec.planner.types.RelDataTypeDrillImpl;
 import org.apache.drill.exec.planner.types.RelDataTypeHolder;
 import org.apache.drill.exec.store.StoragePlugin;
@@ -28,6 +28,10 @@ public class DynamicDrillTable extends DrillTable{
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(DynamicDrillTable.class);
 
   private RelDataTypeHolder holder = new RelDataTypeHolder();
+  
+  public DynamicDrillTable(StoragePlugin plugin, String storageEngineName, Object selection, DrillTableMetadata metadata) {
+    super(storageEngineName, plugin, selection, metadata);
+  }
   
   public DynamicDrillTable(StoragePlugin plugin, String storageEngineName, Object selection) {
     super(storageEngineName, plugin, selection);

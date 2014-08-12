@@ -27,6 +27,7 @@ import net.hydromatic.optiq.Table;
 import org.apache.drill.common.JSONOptions;
 import org.apache.drill.common.logical.StoragePluginConfig;
 import org.apache.drill.exec.physical.base.GroupScan;
+import org.apache.drill.exec.planner.common.DrillTableMetadata;
 import org.apache.drill.exec.store.StoragePlugin;
 import org.eigenbase.rel.RelNode;
 import org.eigenbase.relopt.RelOptTable;
@@ -39,11 +40,18 @@ public abstract class DrillTable implements Table{
   private Object selection;
   private StoragePlugin plugin;
   private GroupScan scan; 
+  private DrillTableMetadata tableMetadata;
   
   /** Creates a DrillTable. */
   public DrillTable(String storageEngineName, StoragePlugin plugin, Object selection) {
+    this(storageEngineName, plugin, selection, null);
+  }
+  
+  /** Creates a DrillTable. */
+  public DrillTable(String storageEngineName, StoragePlugin plugin, Object selection, DrillTableMetadata tableMetadata) {
     this.selection = selection;
     this.plugin = plugin;
+    this.tableMetadata = tableMetadata;
     
     this.storageEngineConfig = plugin.getConfig();
     this.storageEngineName = storageEngineName;
@@ -75,6 +83,14 @@ public abstract class DrillTable implements Table{
   @Override
   public Statistic getStatistic() {
     return Statistics.UNKNOWN;
+  }
+  
+  public DrillTableMetadata getDrillTableMetadata() {
+    return tableMetadata;
+  }
+  
+  public void setDrillTableMetadata(DrillTableMetadata tableMetadata) {
+    this.tableMetadata = tableMetadata;
   }
 
   public RelNode toRel(RelOptTable.ToRelContext context, RelOptTable table) {
