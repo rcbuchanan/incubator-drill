@@ -38,4 +38,8 @@ public abstract class DrillScanRelBase extends TableAccessRelBase implements Dri
     assert drillTable != null;
   }
   
+  public DrillTable getDrillTable() {
+    return drillTable;
+  }
+  
 }
