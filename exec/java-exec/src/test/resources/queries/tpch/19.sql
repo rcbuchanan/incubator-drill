@@ -1,9 +1,8 @@
--- tpch19 using 1395599672 as a seed to the RNG
-select
+explain plan including all attributes for select
   sum(l.l_extendedprice* (1 - l.l_discount)) as revenue
 from
-  cp.`tpch/lineitem.parquet` l,
-  cp.`tpch/part.parquet` p
+  dfs.tmp.`lineitem.parquet` l,
+  dfs.tmp.`part.parquet` p
 where
   (
     p.p_partkey = l.l_partkey

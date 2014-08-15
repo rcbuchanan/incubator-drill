@@ -1,13 +1,12 @@
--- tpch14 using 1395599672 as a seed to the RNG
-select
+explain plan including all attributes for select
   100.00 * sum(case
     when p.p_type like 'PROMO%'
       then l.l_extendedprice * (1 - l.l_discount)
     else 0
   end) / sum(l.l_extendedprice * (1 - l.l_discount)) as promo_revenue
 from
-  cp.`tpch/lineitem.parquet` l,
-  cp.`tpch/part.parquet` p
+  dfs.tmp.`lineitem.parquet` l,
+  dfs.tmp.`part.parquet` p
 where
   l.l_partkey = p.p_partkey
   and l.l_shipdate >= date '1994-08-01'

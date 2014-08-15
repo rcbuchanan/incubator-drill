@@ -1,6 +1,4 @@
--- using 1395599672 as a seed to the RNG
-
-select
+explain plan including all attributes for select
   l_returnflag,
   l_linestatus,
   sum(l_quantity) as sum_qty,
@@ -12,7 +10,7 @@ select
   avg(l_discount) as avg_disc,
   count(*) as count_order
 from
-  cp.`tpch/lineitem.parquet`
+  dfs.tmp.`lineitem.parquet`
 where
   l_shipdate <= date '1998-12-01' - interval '120' day (3)
 group by

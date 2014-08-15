@@ -1,5 +1,4 @@
--- tpch12 using 1395599672 as a seed to the RNG
-select
+explain plan including all attributes for select
   l.l_shipmode,
   sum(case
     when o.o_orderpriority = '1-URGENT'
@@ -14,8 +13,8 @@ select
     else 0
   end) as low_line_count
 from
-  cp.`tpch/orders.parquet` o,
-  cp.`tpch/lineitem.parquet` l
+  dfs.tmp.`orders.parquet` o,
+  dfs.tmp.`lineitem.parquet` l
 where
   o.o_orderkey = l.l_orderkey
   and l.l_shipmode in ('TRUCK', 'REG AIR')

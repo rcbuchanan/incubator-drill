@@ -1,15 +1,14 @@
--- tpch5 using 1395599672 as a seed to the RNG
-select
+explain plan including all attributes for select
   n.n_name,
   sum(l.l_extendedprice * (1 - l.l_discount)) as revenue
 
 from
-  cp.`tpch/customer.parquet` c,
-  cp.`tpch/orders.parquet` o,
-  cp.`tpch/lineitem.parquet` l,
-  cp.`tpch/supplier.parquet` s,
-  cp.`tpch/nation.parquet` n,
-  cp.`tpch/region.parquet` r
+  dfs.tmp.`customer.parquet` c,
+  dfs.tmp.`orders.parquet` o,
+  dfs.tmp.`lineitem.parquet` l,
+  dfs.tmp.`supplier.parquet` s,
+  dfs.tmp.`nation.parquet` n,
+  dfs.tmp.`region.parquet` r
 
 where
   c.c_custkey = o.o_custkey

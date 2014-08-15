@@ -1,9 +1,8 @@
--- tpch4 using 1395599672 as a seed to the RNG
-select
+explain plan including all attributes for select
   o.o_orderpriority,
   count(*) as order_count
 from
-  cp.`tpch/orders.parquet` o
+  dfs.tmp.`orders.parquet` o
 
 where
   o.o_orderdate >= date '1996-10-01'
@@ -13,7 +12,7 @@ where
     select
       *
     from
-      cp.`tpch/lineitem.parquet` l
+      dfs.tmp.`lineitem.parquet` l
     where
       l.l_orderkey = o.o_orderkey
       and l.l_commitdate < l.l_receiptdate

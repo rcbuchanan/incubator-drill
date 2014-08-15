@@ -1,4 +1,3 @@
--- tpch15 using 1395599672 as a seed to the RNG
 use dfs_test.tmp; -- views can only be created in dfs schema
 
 create view revenue0 (supplier_no, total_revenue) as
@@ -6,21 +5,21 @@ create view revenue0 (supplier_no, total_revenue) as
     l_suppkey,
     sum(l_extendedprice * (1 - l_discount))
   from
-    cp.`tpch/lineitem.parquet`
+    dfs.tmp.`lineitem.parquet`
   where
     l_shipdate >= date '1993-05-01'
     and l_shipdate < date '1993-05-01' + interval '3' month
   group by
     l_suppkey;
     
-select
+explain plan including all attributes for select
   s.s_suppkey,
   s.s_name,
   s.s_address,
   s.s_phone,
   r.total_revenue
 from
-  cp.`tpch/supplier.parquet` s,
+  dfs.tmp.`supplier.parquet` s,
   revenue0 r
 where
   s.s_suppkey = r.supplier_no

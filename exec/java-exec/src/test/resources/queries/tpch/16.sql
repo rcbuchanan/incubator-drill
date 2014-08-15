@@ -1,12 +1,11 @@
--- tpch16 using 1395599672 as a seed to the RNG
-select
+explain plan including all attributes for select
   p.p_brand,
   p.p_type,
   p.p_size,
   count(distinct ps.ps_suppkey) as supplier_cnt
 from
-  cp.`tpch/partsupp.parquet` ps,
-  cp.`tpch/part.parquet` p
+  dfs.tmp.`partsupp.parquet` ps,
+  dfs.tmp.`part.parquet` p
 where
   p.p_partkey = ps.ps_partkey
   and p.p_brand <> 'Brand#21'
@@ -16,7 +15,7 @@ where
     select
       s.s_suppkey
     from
-      cp.`tpch/supplier.parquet` s
+      dfs.tmp.`supplier.parquet` s
     where
       s.s_comment like '%Customer%Complaints%'
   )

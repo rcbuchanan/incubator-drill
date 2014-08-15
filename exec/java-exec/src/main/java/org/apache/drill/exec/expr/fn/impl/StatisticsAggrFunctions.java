@@ -222,6 +222,24 @@ public class StatisticsAggrFunctions {
           case org.apache.drill.common.types.TypeProtos.MinorType.VARCHAR_VALUE:
             hll.offer(in.readText().toString());
             break;
+          case org.apache.drill.common.types.TypeProtos.MinorType.FLOAT8_VALUE:
+            hll.offer(in.readDouble());
+            break;
+          case org.apache.drill.common.types.TypeProtos.MinorType.INT_VALUE:
+            hll.offer(in.readInteger());
+            break;
+          case org.apache.drill.common.types.TypeProtos.MinorType.BIGINT_VALUE:
+            hll.offer(in.readLong());
+            break;
+          case org.apache.drill.common.types.TypeProtos.MinorType.DATE_VALUE:
+          case org.apache.drill.common.types.TypeProtos.MinorType.TIMESTAMP_VALUE:
+          case org.apache.drill.common.types.TypeProtos.MinorType.TIME_VALUE:
+          case org.apache.drill.common.types.TypeProtos.MinorType.TIMETZ_VALUE:
+            hll.offer(in.readDateTime());
+            break;
+          case org.apache.drill.common.types.TypeProtos.MinorType.VARBINARY_VALUE:
+            hll.offer(in.readByteArray());
+            break;
           default:
             work.obj = null;
           }

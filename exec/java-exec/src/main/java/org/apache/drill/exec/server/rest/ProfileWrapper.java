@@ -169,7 +169,7 @@ public class ProfileWrapper {
   }
   
   public String getOperatorsOverview() {
-    final String [] columns = {"Operator", "Type", "Setup (min)", "Setup (avg)", "Setup (max)", "Process (min)", "Process (avg)", "Process (max)", "Wait (min)", "Wait (avg)", "Wait (max)"};
+    final String [] columns = {"Operator", "Type", "Setup (min)", "Setup (avg)", "Setup (max)", "Process (min)", "Process (avg)", "Process (max)", "Wait (min)", "Wait (avg)", "Wait (max)", "Input Records"};
     TableBuilder tb = new TableBuilder(columns);
     for (OperatorWrapper ow : getOperatorProfiles()) {
       ow.addSummary(tb);
@@ -299,10 +299,17 @@ public class ProfileWrapper {
       double setupSum = 0.0;
       double processSum = 0.0;
       double waitSum = 0.0;
+      long totalRecords = 0;
       for (ImmutablePair<OperatorProfile, Integer> ip : ops) {
         setupSum += ip.getLeft().getSetupNanos();
         processSum += ip.getLeft().getProcessNanos();
         waitSum += ip.getLeft().getWaitNanos();
+        
+        long r = 0;
+        for (StreamProfile sp : ip.getLeft().getInputProfileList()) {
+          r = Math.max(r, sp.getRecords());
+        }
+        totalRecords += r;
       }
       
       Collections.sort(ops, Comparators.setupTimeSort);
@@ -319,6 +326,8 @@ public class ProfileWrapper {
       tb.appendNanos(ops.get(0).getLeft().getWaitNanos(), String.format(fmt, ops.get(0).getRight()));
       tb.appendNanos((long) (waitSum / ops.size()), null);
       tb.appendNanos(ops.get(li).getLeft().getWaitNanos(), String.format(fmt, ops.get(li).getRight()));
+      
+      tb.appendInteger(totalRecords, null);
     }
   }
 

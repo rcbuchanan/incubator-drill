@@ -1,9 +1,8 @@
--- tpch6 using 1395599672 as a seed to the RNG
 
-select
+explain plan including all attributes for select
   sum(l_extendedprice * l_discount) as revenue
 from
-  cp.`tpch/lineitem.parquet`
+  dfs.tmp.`lineitem.parquet`
 where
   l_shipdate >= date '1997-01-01'
   and l_shipdate < date '1997-01-01' + interval '1' year

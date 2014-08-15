@@ -17,6 +17,7 @@
  */
 package org.apache.drill.exec.planner.common;
 
+import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -24,15 +25,23 @@ import java.util.List;
 import org.apache.drill.exec.planner.cost.DrillCostBase.DrillCostFactory;
 import org.apache.drill.exec.planner.physical.PrelUtil;
 import org.eigenbase.rel.InvalidRelException;
+import org.eigenbase.rel.JoinRel;
 import org.eigenbase.rel.JoinRelBase;
 import org.eigenbase.rel.JoinRelType;
 import org.eigenbase.rel.RelNode;
+import org.eigenbase.rel.metadata.RelMetadataQuery;
 import org.eigenbase.relopt.RelOptCluster;
 import org.eigenbase.relopt.RelOptCost;
 import org.eigenbase.relopt.RelOptPlanner;
+import org.eigenbase.relopt.RelOptUtil;
 import org.eigenbase.relopt.RelTraitSet;
+import org.eigenbase.relopt.volcano.RelSubset;
 import org.eigenbase.reltype.RelDataType;
+import org.eigenbase.rex.RexCall;
+import org.eigenbase.rex.RexInputRef;
 import org.eigenbase.rex.RexNode;
+import org.eigenbase.sql.SqlKind;
+import org.eigenbase.util14.NumberUtil;
 
 import com.google.common.collect.Lists;
 
@@ -58,11 +67,86 @@ public abstract class DrillJoinRelBase extends JoinRelBase implements DrillRelNo
     return super.computeSelfCost(planner);
   }
 
+
   @Override
   public double getRows() {
-    return joinRowFactor * Math.max(this.getLeft().getRows(), this.getRight().getRows());
+    int[] joinFields = new int[2];
+    if (analyzeSimpleEquiJoin(this, joinFields)) {
+      BitSet left = new BitSet();
+      BitSet right = new BitSet();
+      left.set(joinFields[0]);
+      right.set(joinFields[1]);
+      
+      Double leftsel = RelMetadataQuery.getPopulationSize(this.getLeft(), left);
+      Double rightsel = RelMetadataQuery.getPopulationSize(this.getRight(), right);
+      double leftcount = RelMetadataQuery.getRowCount(this.getLeft());
+      double rightcount = RelMetadataQuery.getRowCount(this.getRight());
+
+//      System.out.print(
+//          ((leftrows != null || rightrows != null) ? (this + "\n") : "") +
+//          ((leftrows != null) ? ("    " + leftrows + ", " + this.getLeft() + "\n") : "") +
+//          ((rightrows != null) ? ("    " + rightrows + ", " + this.getRight() + "\n") : ""));
+      if (leftsel != null && rightsel != null) {
+        return Math.min(leftsel / leftcount, rightsel / rightcount) * leftcount * rightcount;
+      }
+      
+      return joinRowFactor * Math.max(leftcount, rightcount);
+    }
+    
+
+//    System.out.print(this + "\n" +
+//        "    " + this.getLeft() + "\n" +
+//        "    " + this.getRight() + "\n");
+    
+    return joinRowFactor * Math.max(
+        RelMetadataQuery.getRowCount(left),
+        RelMetadataQuery.getRowCount(right));
+  }
+  
+  public static boolean analyzeSimpleEquiJoin(
+      DrillJoinRelBase joinRel,
+      int[] joinFieldOrdinals) {
+    RexNode joinExp = joinRel.getCondition();
+    if (joinExp.getKind() != SqlKind.EQUALS) {
+      return false;
+    }
+    RexCall binaryExpression = (RexCall) joinExp;
+    RexNode leftComparand = binaryExpression.operands.get(0);
+    RexNode rightComparand = binaryExpression.operands.get(1);
+    if (!(leftComparand instanceof RexInputRef)) {
+      return false;
+    }
+    if (!(rightComparand instanceof RexInputRef)) {
+      return false;
+    }
+
+    final int leftFieldCount =
+        joinRel.getLeft().getRowType().getFieldCount();
+    RexInputRef leftFieldAccess = (RexInputRef) leftComparand;
+    if (!(leftFieldAccess.getIndex() < leftFieldCount)) {
+      // left field must access left side of join
+      return false;
+    }
+
+    RexInputRef rightFieldAccess = (RexInputRef) rightComparand;
+    if (!(rightFieldAccess.getIndex() >= leftFieldCount)) {
+      // right field must access right side of join
+      return false;
+    }
+
+    joinFieldOrdinals[0] = leftFieldAccess.getIndex();
+    joinFieldOrdinals[1] = rightFieldAccess.getIndex() - leftFieldCount;
+    return true;
   }
 
+  private static BitSet asBitSet(List<Integer> l) {
+    BitSet bs = new BitSet();
+    for (int i : l) {
+      bs.set(i);
+    }
+    
+    return bs;
+  }
   /**
    * Returns whether there are any elements in common between left and right.
    */
