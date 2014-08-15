@@ -25,21 +25,37 @@ import net.hydromatic.optiq.BuiltinMethod;
 
 import org.apache.drill.exec.planner.logical.DrillScanRel;
 import org.apache.drill.exec.planner.physical.ScanPrel;
+import org.eigenbase.rel.metadata.ChainedRelMetadataProvider;
 import org.eigenbase.rel.metadata.ReflectiveRelMetadataProvider;
 import org.eigenbase.rel.metadata.RelMetadataProvider;
 import org.eigenbase.reltype.RelDataTypeField;
 import org.eigenbase.rex.RexNode;
+
+import com.google.common.collect.Lists;
 
 /**
  * Thin interface around DrillTableMetadata that reads out of
  * nodes that have drillTables attached to them
  */
 public class DrillScanRelMdProvider {
-  public static final RelMetadataProvider SOURCE = 
-  ReflectiveRelMetadataProvider.reflectiveSource(
-      BuiltinMethod.DISTINCT_ROW_COUNT.method, new DrillScanRelMdProvider());
+  private static final DrillScanRelMdProvider SINGLETON = new DrillScanRelMdProvider();
+  public static final RelMetadataProvider SOURCE = ChainedRelMetadataProvider.of(
+      Lists.newArrayList(
+          ReflectiveRelMetadataProvider.reflectiveSource(
+              BuiltinMethod.DISTINCT_ROW_COUNT.method, SINGLETON),
+          ReflectiveRelMetadataProvider.reflectiveSource(
+              BuiltinMethod.ROW_COUNT.method, SINGLETON)));
   
   private DrillScanRelMdProvider() {}
+  
+  public Double getRowCount(DrillScanRel rel) {
+    return rel.getDrillTable().getDrillTableMetadata() == null ? null : rel.getDrillTable().getDrillTableMetadata().getRowCount();
+  }
+  
+  public Double getRowCount(ScanPrel prel) {
+    System.out.println("Returning row count");
+    return prel.getDrillTable().getDrillTableMetadata() == null ? null : prel.getDrillTable().getDrillTableMetadata().getRowCount();
+  }
   
   public Double getDistinctRowCount(
       DrillScanRel rel,

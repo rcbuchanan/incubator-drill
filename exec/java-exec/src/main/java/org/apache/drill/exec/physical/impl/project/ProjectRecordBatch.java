@@ -17,6 +17,8 @@
  */
 package org.apache.drill.exec.physical.impl.project;
 
+import io.netty.buffer.ByteBuf;
+
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
@@ -49,6 +51,7 @@ import org.apache.drill.exec.expr.TypeHelper;
 import org.apache.drill.exec.expr.ValueVectorReadExpression;
 import org.apache.drill.exec.expr.ValueVectorWriteExpression;
 import org.apache.drill.exec.expr.fn.DrillComplexWriterFuncHolder;
+import org.apache.drill.exec.memory.BufferAllocator;
 import org.apache.drill.exec.memory.OutOfMemoryException;
 import org.apache.drill.exec.ops.FragmentContext;
 import org.apache.drill.exec.physical.config.Project;
@@ -58,11 +61,14 @@ import org.apache.drill.exec.record.BatchSchema;
 import org.apache.drill.exec.record.BatchSchema.SelectionVectorMode;
 import org.apache.drill.exec.record.MaterializedField;
 import org.apache.drill.exec.record.RecordBatch;
+import org.apache.drill.exec.record.SimpleVectorWrapper;
 import org.apache.drill.exec.record.TransferPair;
 import org.apache.drill.exec.record.TypedFieldId;
 import org.apache.drill.exec.record.VectorContainer;
 import org.apache.drill.exec.record.VectorWrapper;
+import org.apache.drill.exec.vector.RepeatedBigIntVector;
 import org.apache.drill.exec.vector.ValueVector;
+import org.apache.drill.exec.vector.complex.MapVector;
 import org.apache.drill.exec.vector.complex.writer.BaseWriter.ComplexWriter;
 
 import com.carrotsearch.hppc.IntOpenHashSet;
@@ -361,6 +367,20 @@ public class ProjectRecordBatch extends AbstractSingleRecordBatch<Project>{
 
     cg.rotateBlock();
     cg.getEvalBlock()._return(JExpr.TRUE);
+    
+
+//    MapVector mv = new MapVector("extra", null);
+//    //allocationVectors.add(mv);
+//    TypedFieldId fid = container.add(mv);
+//    for (VectorWrapper<?> vw : incoming) {
+//      if (!vw.getField().getLastName().endsWith("points")) continue;
+//      System.out.println("ADDING");
+//      ValueVector vv = mv.addOrGet(
+//          vw.getField().getLastName(), vw.getField().getType(),
+//          (Class<ValueVector>) vw.getValueVector().getClass());
+//      TransferPair tp = vw.getValueVector().makeTransferPair(vv);
+//      tp.transfer();
+//    }
 
     container.buildSchema(SelectionVectorMode.NONE);
 
@@ -370,6 +390,17 @@ public class ProjectRecordBatch extends AbstractSingleRecordBatch<Project>{
     } catch (ClassTransformationException | IOException e) {
       throw new SchemaChangeException("Failure while attempting to load generated class", e);
     }
+  }
+  
+  class ExtraMapVector extends MapVector {
+
+    public ExtraMapVector(String field, BufferAllocator allocator) {
+      super(field, allocator);
+    }
+    
+    public void putVec(String name, ValueVector vv) {
+      super.put(name, vv);
+    }    
   }
 
   private List<NamedExpression> getExpressionList() {

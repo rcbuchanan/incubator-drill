@@ -125,14 +125,19 @@ public class AnalyzeTableHandler extends DefaultSqlHandler {
     if (convertedRelNode instanceof DrillStoreRel) {
       throw new UnsupportedOperationException();
     } else {
-      RelNode writerRel = new DrillWriterRel(
-              convertedRelNode.getCluster(),
-              convertedRelNode.getTraitSet(),
-              new DrillAnalyzeRel(
-                      convertedRelNode.getCluster(),
-                      convertedRelNode.getTraitSet(),
-                      convertedRelNode),
-              schema.appendTableStats(analyzeTableName));
+//      RelNode writerRel = new DrillWriterRel(
+//              convertedRelNode.getCluster(),
+//              convertedRelNode.getTraitSet(),
+//              new DrillAnalyzeRel(
+//                      convertedRelNode.getCluster(),
+//                      convertedRelNode.getTraitSet(),
+//                      convertedRelNode),
+//              schema.appendTableStats(analyzeTableName));
+//      
+      RelNode writerRel = new DrillAnalyzeRel(
+                  convertedRelNode.getCluster(),
+                  convertedRelNode.getTraitSet(),
+                  convertedRelNode);
       return new DrillScreenRel(writerRel.getCluster(), writerRel.getTraitSet(), writerRel);
     }
   }

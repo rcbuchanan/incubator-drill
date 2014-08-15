@@ -130,9 +130,9 @@ public abstract class AbstractContainerVector implements ValueVector{
     return false;
   }
 
-  protected class VectorWithOrdinal{
+  public class VectorWithOrdinal{
     final ValueVector vector;
-    final int ordinal;
+    public final int ordinal;
 
     public VectorWithOrdinal(ValueVector v, int ordinal){
       this.vector = v;

@@ -45,6 +45,10 @@ public class AnalyzePrule extends Prule {
     SingleRel newAnalyze = new UnpivotStatsPrel(
         new StatsAggPrel(convertedInput, analyze.getCluster(), funcs),
         analyze.getCluster());
+//    SingleRel newAnalyze =  new StatsAggPrel(
+//        convertedInput,
+//        analyze.getCluster(),
+//        funcs);
     call.transformTo(newAnalyze);
   }
 

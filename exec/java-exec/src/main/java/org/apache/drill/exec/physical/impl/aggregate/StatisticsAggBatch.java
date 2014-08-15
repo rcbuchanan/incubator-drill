@@ -52,11 +52,14 @@ import org.apache.drill.exec.record.BatchSchema;
 import org.apache.drill.exec.record.BatchSchema.SelectionVectorMode;
 import org.apache.drill.exec.record.MaterializedField;
 import org.apache.drill.exec.record.RecordBatch;
+import org.apache.drill.exec.record.SimpleVectorWrapper;
 import org.apache.drill.exec.record.TypedFieldId;
 import org.apache.drill.exec.record.selection.SelectionVector2;
 import org.apache.drill.exec.record.selection.SelectionVector4;
+import org.apache.drill.exec.vector.RepeatedVarCharVector;
 import org.apache.drill.exec.vector.ValueVector;
 import org.apache.drill.exec.vector.allocator.VectorAllocator;
+import org.apache.drill.exec.vector.complex.MapVector;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
@@ -65,82 +68,137 @@ import com.sun.codemodel.JVar;
 
 public class StatisticsAggBatch extends StreamingAggBatch {
   private String[] funcs;
-  private int schemaId;
+  private int schema = 0;
+  private String[] extrakeys;
 
   public StatisticsAggBatch(StatisticsAggregate popConfig, RecordBatch incoming, FragmentContext context) throws OutOfMemoryException {
     super(popConfig, incoming, context);
     this.funcs = popConfig.getFuncs();
-  }
-
-  protected StreamingAggregator createAggregatorInternal() throws SchemaChangeException, ClassTransformationException, IOException{
-    ClassGenerator<StreamingAggregator> cg = CodeGenerator.getRoot(StreamingAggTemplate.TEMPLATE_DEFINITION, context.getFunctionRegistry());
-    container.clear();
-
-    LogicalExpression[] keyExprs = new LogicalExpression[2];
-    LogicalExpression[] valueExprs = new LogicalExpression[incoming.getSchema().getFieldCount() * funcs.length];
-    TypedFieldId[] keyOutputIds = new TypedFieldId[2];
-
-    ErrorCollector collector = new ErrorCollectorImpl();
-
-    {
-      final LogicalExpression expr = ExpressionTreeMaterializer.materialize(
-          new ValueExpressions.IntExpression(schemaId++, ExpressionPosition.UNKNOWN),
-          incoming, collector, context.getFunctionRegistry() );
-      keyExprs[0] = expr;
-      final MaterializedField outputField = MaterializedField.create("schemaId", expr.getMajorType());
-      ValueVector vector = TypeHelper.getNewVector(outputField, oContext.getAllocator());
-      keyOutputIds[0] = container.add(vector);
-    }
     
-    {
-      final LogicalExpression expr = ExpressionTreeMaterializer.materialize(
-          new ValueExpressions.TimeStampExpression(System.currentTimeMillis()),
-          incoming, collector, context.getFunctionRegistry());
-      keyExprs[1] = expr;
-      final MaterializedField outputField = MaterializedField.create("computed", expr.getMajorType());
-      ValueVector vector = TypeHelper.getNewVector(outputField, oContext.getAllocator());
-      keyOutputIds[1] = container.add(vector);
+    final String [] eks = {"extrakey"};
+    this.extrakeys = eks;
+  }
+  
+  private void createKeyColumn(String name, LogicalExpression expr, List<LogicalExpression> keyExprs, List<TypedFieldId> keyOutputIds) throws SchemaChangeException {
+    ErrorCollector collector = new ErrorCollectorImpl();
+    
+    final LogicalExpression mle = ExpressionTreeMaterializer.materialize(
+        expr,
+        incoming,
+        collector,
+        context.getFunctionRegistry());
+    
+    final MaterializedField outputField = MaterializedField.create(
+        name,
+        mle.getMajorType());
+    ValueVector vector = TypeHelper.getNewVector(
+        outputField,
+        oContext.getAllocator());
+    
+    keyExprs.add(mle);
+    keyOutputIds.add(container.add(vector));
+    
+    if(collector.hasErrors()) {
+      throw new SchemaChangeException(
+          "Failure while materializing expression. " + collector.toErrorString());
     }
+  }
+  
+  private void addMapVector(String name, MapVector parent, LogicalExpression expr, List<LogicalExpression> valueExprs) throws SchemaChangeException {
+    ErrorCollector collector = new ErrorCollectorImpl();
+    
+    LogicalExpression mle = ExpressionTreeMaterializer.materialize(
+        expr,
+        incoming,
+        collector,
+        context.getFunctionRegistry());
+    
+    Class<? extends ValueVector> vvc =
+        (Class<? extends ValueVector>) TypeHelper.getValueVectorClass(
+            mle.getMajorType().getMinorType(),
+            mle.getMajorType().getMode());
+    ValueVector vv = parent.addOrGet(name, mle.getMajorType(), vvc);
+    
+    TypedFieldId pfid = container.getValueVectorId(parent.getField().getPath());
+    assert pfid.getFieldIds().length == 1;
+    TypedFieldId.Builder builder = TypedFieldId.newBuilder();
+    builder.addId(pfid.getFieldIds()[0]);
+    TypedFieldId id = parent.getFieldIdIfMatches(
+        builder,
+        true,
+        vv.getField().getPath().getRootSegment().getChild());
+    
+    valueExprs.add(new ValueVectorWriteExpression(id, mle, true));
 
-    for (int i = 0; i < funcs.length; i++) {
-      for(int j = 0; j < incoming.getSchema().getFieldCount(); j++){
-        List<LogicalExpression> args = Lists.newArrayList();
-        args.add(incoming.getSchema().getColumn(j).getPath());
-        int fieldno = i * incoming.getSchema().getFieldCount() + j;
-        
-        LogicalExpression expr = ExpressionTreeMaterializer.materialize(
-            FunctionCallFactory.createExpression(funcs[i], args),
-            incoming, collector, context.getFunctionRegistry());
-        
-        //TODO: nope.
-        if(expr == null) {
-          expr = new NullExpression();
-        }
-        
-        final MaterializedField outputField = MaterializedField.create(
-            funcs[i] + "_" + incoming.getSchema().getColumn(j).getLastName(),
-            expr.getMajorType());
-        ValueVector vector = TypeHelper.getNewVector(outputField, oContext.getAllocator());
-        TypedFieldId id = container.add(vector);
-        valueExprs[fieldno] = new ValueVectorWriteExpression(id, expr, true);
-        
-      }
+    if(collector.hasErrors()) {
+      throw new SchemaChangeException(
+          "Failure while materializing expression. " + collector.toErrorString());
     }
+  }
+  
+  private StreamingAggregator codegenAggregator(List<LogicalExpression> keyExprs, List<LogicalExpression> valueExprs, List<TypedFieldId> keyOutputIds) throws SchemaChangeException, ClassTransformationException, IOException {
+    ClassGenerator<StreamingAggregator> cg = CodeGenerator.getRoot(StreamingAggTemplate.TEMPLATE_DEFINITION, context.getFunctionRegistry());
 
-    if(collector.hasErrors()) throw new SchemaChangeException("Failure while materializing expression. " + collector.toErrorString());
-
-    setupIsSame(cg, keyExprs);
-    setupIsSameApart(cg, keyExprs);
-    addRecordValues(cg, valueExprs);
-    outputRecordKeys(cg, keyOutputIds, keyExprs);
-    outputRecordKeysPrev(cg, keyOutputIds, keyExprs);
+    LogicalExpression[] keyExprsArray = new LogicalExpression[keyExprs.size()];
+    LogicalExpression[] valueExprsArray = new LogicalExpression[valueExprs.size()];
+    TypedFieldId[] keyOutputIdsArray = new TypedFieldId[keyOutputIds.size()];
+    
+    keyExprs.toArray(keyExprsArray);
+    valueExprs.toArray(valueExprsArray);
+    keyOutputIds.toArray(keyOutputIdsArray);
+    
+    setupIsSame(cg, keyExprsArray);
+    setupIsSameApart(cg, keyExprsArray);
+    addRecordValues(cg, valueExprsArray);
+    outputRecordKeys(cg, keyOutputIdsArray, keyExprsArray);
+    outputRecordKeysPrev(cg, keyOutputIdsArray, keyExprsArray);
 
     cg.getBlock("resetValues")._return(JExpr.TRUE);
     getIndex(cg);
-
+    
     container.buildSchema(SelectionVectorMode.NONE);
     StreamingAggregator agg = context.getImplementationClass(cg);
     agg.setup(context, incoming, this);
     return agg;
+  }
+
+  protected StreamingAggregator createAggregatorInternal() throws SchemaChangeException, ClassTransformationException, IOException{
+    container.clear();
+    
+    List<LogicalExpression> keyExprs = Lists.newArrayList();
+    List<LogicalExpression> valueExprs = Lists.newArrayList();
+    List<TypedFieldId> keyOutputIds = Lists.newArrayList();
+
+    createKeyColumn("schema",
+        ValueExpressions.getBigInt(schema++),
+        keyExprs,
+        keyOutputIds);
+    createKeyColumn("computed",
+        ValueExpressions.getBigInt(System.currentTimeMillis()),
+        keyExprs,
+        keyOutputIds);
+    
+    for (String k : extrakeys) {
+      for (MaterializedField mf : incoming.getSchema()) {
+        if (mf.getLastName() == k) {
+          createKeyColumn(k, mf.getPath(), keyExprs, keyOutputIds);
+        }
+      }
+    }
+
+    for (String func : funcs) {
+      MapVector parent = new MapVector(func, oContext.getAllocator());
+      container.add(parent);
+      
+      for (MaterializedField mf : incoming.getSchema()) {
+        List<LogicalExpression> args = Lists.newArrayList();
+        args.add(mf.getPath());
+        LogicalExpression call = FunctionCallFactory.createExpression(func, args);
+        
+        addMapVector(mf.getLastName(), parent, call, valueExprs);
+      }
+    }
+
+    return codegenAggregator(keyExprs, valueExprs, keyOutputIds);
   }
 }

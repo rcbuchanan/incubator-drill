@@ -44,11 +44,16 @@ public class DrillTableMetadata {
   private String statsTableString;
   List<Map<String, Object>> result;
   Map<String, Long> ndv;
+  double rowcount = -1;
   
   public DrillTableMetadata(Table statsTable, String statsTableString) {
     // TODO: this should actually be a Table object or a selection or something instead of a string
     this.statsTable = statsTable;
     this.statsTableString = statsTableString;
+  }
+  
+  public Double getRowCount() {
+    return rowcount > 0 ? new Double(rowcount) : null;
   }
   
   public Double getDistinctRowCount(List<RelDataTypeField> fields, BitSet selection) {
@@ -97,6 +102,7 @@ public class DrillTableMetadata {
     ndv = new HashMap<String, Long>();
     for (Map<String, Object> r : result) {
       ndv.put((String) r.get("column"), (Long) r.get("ndv"));
+      rowcount = Math.max(rowcount, r.containsKey("statcount") ? (Long) r.get("statcount") : 0);
     }
     System.out.println("build hash map!");
   }
