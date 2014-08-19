@@ -17,6 +17,9 @@
  */
 package org.apache.drill.exec.expr.fn.impl;
 
+import org.apache.drill.common.types.TypeProtos.DataMode;
+import org.apache.drill.common.types.TypeProtos.MinorType;
+import org.apache.drill.exec.expr.DrillAggFunc;
 import org.apache.drill.exec.expr.DrillSimpleFunc;
 import org.apache.drill.exec.expr.annotations.FunctionTemplate;
 import org.apache.drill.exec.expr.annotations.Output;
@@ -26,13 +29,16 @@ import org.apache.drill.exec.expr.holders.BitHolder;
 import org.apache.drill.exec.expr.holders.IntHolder;
 import org.apache.drill.exec.expr.holders.RepeatedBigIntHolder;
 import org.apache.drill.exec.expr.holders.RepeatedIntHolder;
+import org.apache.drill.exec.expr.holders.RepeatedVarCharHolder;
+import org.apache.drill.exec.expr.holders.VarCharHolder;
 import org.apache.drill.exec.record.RecordBatch;
+import org.apache.drill.exec.vector.complex.reader.FieldReader;
 
 public class SimpleRepeatedFunctions {
 
   private SimpleRepeatedFunctions() {
   }
-
+  
   @FunctionTemplate(name = "repeated_count", scope = FunctionTemplate.FunctionScope.SIMPLE)
   public static class RepeatedLengthBigInt implements DrillSimpleFunc {
 

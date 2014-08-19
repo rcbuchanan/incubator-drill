@@ -54,6 +54,7 @@ import org.apache.drill.exec.record.MaterializedField;
 import org.apache.drill.exec.record.RecordBatch;
 import org.apache.drill.exec.record.SimpleVectorWrapper;
 import org.apache.drill.exec.record.TypedFieldId;
+import org.apache.drill.exec.record.VectorWrapper;
 import org.apache.drill.exec.record.selection.SelectionVector2;
 import org.apache.drill.exec.record.selection.SelectionVector4;
 import org.apache.drill.exec.vector.RepeatedVarCharVector;
@@ -70,7 +71,7 @@ public class StatisticsAggBatch extends StreamingAggBatch {
   private String[] funcs;
   private int schema = 0;
   private String[] extrakeys;
-
+  
   public StatisticsAggBatch(StatisticsAggregate popConfig, RecordBatch incoming, FragmentContext context) throws OutOfMemoryException {
     super(popConfig, incoming, context);
     this.funcs = popConfig.getFuncs();

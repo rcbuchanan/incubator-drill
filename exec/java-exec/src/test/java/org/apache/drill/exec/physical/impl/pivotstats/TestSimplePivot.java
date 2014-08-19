@@ -76,7 +76,7 @@ public class TestSimplePivot extends BaseTestQuery {
     //results = testSqlWithResults("select rfields(`employee_id`) from cp.`employee.json` limit 5");
     //results = testSqlWithResults("select hll_decode(hll(`employee_id`)) from cp.`employee.json`");
     results = testSqlWithResults("analyze table dfs.tmp.`test.json` compute statistics for all columns");
-    //results = testSqlWithResults("select * from dfs.tmp.`test1.json` t1 inner join dfs.tmp.`test2.json` t2 on t1.color = t2.color");
+    //results = testSqlWithResults("select * from dfs.tmp.`test.json`");
     //results = testSqlWithResults("select * from dfs.tmp.`test1.json` t1 inner join dfs.tmp.`test2.json` t2 on t1.color = t2.color inner join dfs.tmp.`test3.json` t3 on t1.adj = t3.adj");
     //setColumnWidth(10000);
     printResult(results);

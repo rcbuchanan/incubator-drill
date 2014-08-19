@@ -17,76 +17,55 @@
  */
 package org.apache.drill.exec.physical.impl.statspivot;
 
-import java.io.IOException;
-import java.util.Collections;
+import io.netty.buffer.ByteBuf;
+
 import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.lang3.tuple.ImmutablePair;
-import org.apache.drill.common.expression.ErrorCollector;
-import org.apache.drill.common.expression.ErrorCollectorImpl;
-import org.apache.drill.common.expression.ExpressionPosition;
 import org.apache.drill.common.expression.FieldReference;
-import org.apache.drill.common.expression.LogicalExpression;
-import org.apache.drill.common.expression.PathSegment;
-import org.apache.drill.common.expression.ValueExpressions;
-import org.apache.drill.common.expression.PathSegment.NameSegment;
-import org.apache.drill.common.expression.ValueExpressions.IntExpression;
-import org.apache.drill.common.expression.SchemaPath;
-import org.apache.drill.common.logical.data.NamedExpression;
-import org.apache.drill.common.types.TypeProtos.DataMode;
-import org.apache.drill.common.types.Types;
-import org.apache.drill.common.types.TypeProtos.MajorType;
 import org.apache.drill.common.types.TypeProtos.MinorType;
-import org.apache.drill.exec.compile.sig.GeneratorMapping;
-import org.apache.drill.exec.compile.sig.MappingSet;
-import org.apache.drill.exec.exception.ClassTransformationException;
 import org.apache.drill.exec.exception.SchemaChangeException;
-import org.apache.drill.exec.expr.ClassGenerator;
-import org.apache.drill.exec.expr.ClassGenerator.HoldingContainer;
-import org.apache.drill.exec.expr.CodeGenerator;
-import org.apache.drill.exec.expr.ExpressionTreeMaterializer;
-import org.apache.drill.exec.expr.TypeHelper;
-import org.apache.drill.exec.expr.ValueVectorWriteExpression;
 import org.apache.drill.exec.memory.OutOfMemoryException;
 import org.apache.drill.exec.ops.FragmentContext;
 import org.apache.drill.exec.physical.config.UnpivotStats;
 import org.apache.drill.exec.record.AbstractSingleRecordBatch;
 import org.apache.drill.exec.record.BatchSchema.SelectionVectorMode;
-import org.apache.drill.exec.record.MaterializedField;
 import org.apache.drill.exec.record.RecordBatch;
 import org.apache.drill.exec.record.TransferPair;
-import org.apache.drill.exec.record.TypedFieldId;
 import org.apache.drill.exec.record.VectorContainer;
 import org.apache.drill.exec.record.VectorWrapper;
 import org.apache.drill.exec.record.WritableBatch;
-import org.apache.drill.exec.util.VectorUtil;
 import org.apache.drill.exec.vector.ValueVector;
 import org.apache.drill.exec.vector.VarCharVector;
-import org.apache.drill.exec.vector.VarCharVector.Mutator;
 import org.apache.drill.exec.vector.complex.MapVector;
-import org.apache.drill.exec.vector.complex.writer.BaseWriter.ComplexWriter;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JExpr;
 
 public class UnpivotStatsRecordBatch extends AbstractSingleRecordBatch<UnpivotStats>{
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(UnpivotStatsRecordBatch.class);
   
-  String flattensrc = "statcount";
-  String flattendest = "column";
+  String keysrc = "statcount";
+  String keydest = "column";
+  List<String> datasrcs = Lists.newArrayList(
+      "statcount",
+      "nonnullstatcount",
+      "ndv",
+      "hll");
 
   WritableBatch incomingData;
-  VarCharVector keyvector;
-  List<TransferPair> transfers = null;
-  List<String> mapkeys = null;
-  int keyindex = 0;
+  VarCharVector keyVec;
+  int keyIndex = 0;
+  List<String> keyList = null;
+  Map<String, Map<String, ValueVector>> dataSrcVecMap = null;
+  Map<String, ValueVector> dataDestVecMap;
+  
+  List<ValueVector> transferSrcList;
+  List<TransferPair> transferList;
 
   private boolean hasRemainder = false;
   private int remainderIndex = 0;
-  private int recordCount;
+  private int recordCount = 0;
   
   public UnpivotStatsRecordBatch(UnpivotStats pop, RecordBatch incoming, FragmentContext context) throws OutOfMemoryException {
     super(pop, context, incoming);
@@ -103,16 +82,13 @@ public class UnpivotStatsRecordBatch extends AbstractSingleRecordBatch<UnpivotSt
       handleRemainder();
       return IterOutcome.OK;
       
-    } else if (keyindex != 0) {
+    } else if (keyIndex != 0) {
       doWork();
       return IterOutcome.OK;
       
     } else {
-      incomingData = incoming.getWritableBatch();
-      incomingData.retainBuffers();
-      incomingData.reconstructContainer(container);
-      
       return super.innerNext();
+      
     }
   }
 
@@ -124,21 +100,12 @@ public class UnpivotStatsRecordBatch extends AbstractSingleRecordBatch<UnpivotSt
     // TODO: handle remainder batch!!!
   }
   
-  private int unpivotRecords() {
+  private int doTransfer() {
     int n;
-//    Mutator m = keyvector.getMutator();
-//    byte [] d = mapkeys.get(keyindex).getBytes();
-//    
-//    for (n = 0; n < incoming.getRecordCount(); n++) {
-//      if (!m.setSafe(n, d)) {
-//        break;
-//      }
-//    }
-    // TODO: handle full keyvector!!
-    System.out.println("Unpivoting");
+
     n = incoming.getRecordCount();
     
-    for (TransferPair tp : transfers) {
+    for (TransferPair tp : transferList) {
       tp.splitAndTransfer(0, n);
     }
     
@@ -148,62 +115,102 @@ public class UnpivotStatsRecordBatch extends AbstractSingleRecordBatch<UnpivotSt
   @Override
   protected void doWork() {
     int outRecordCount = incoming.getRecordCount();
-    int inRecordCount = unpivotRecords();
+    int inRecordCount = doTransfer();
     
     if (inRecordCount < outRecordCount) {
       hasRemainder = true;
       remainderIndex = outRecordCount;
       this.recordCount = remainderIndex;
     } else {
-      keyindex = (keyindex + 1) % mapkeys.size();
+      keyIndex = (keyIndex + 1) % keyList.size();
+      prepareTransfers();
     }
-    assert outRecordCount == incoming.getRecordCount();
-    
     this.recordCount = outRecordCount;
   }
   
-  @Override
-  protected void setupNewSchema() throws SchemaChangeException{
-    transfers = Lists.newArrayList();
-    mapkeys = Lists.newArrayList();
-
+  private void buildKeyList() {
+    for (VectorWrapper<?> vw : incoming) {
+      String ks = vw.getField().getLastName();
+      
+      if (ks != keysrc) {
+        continue;
+      }
+      
+      assert keyList == null;
+      keyList = Lists.newArrayList();
+      
+      for (ValueVector vv : (MapVector) vw.getValueVector()) {
+        keyList.add(vv.getField().getLastName());
+      }
+    }
+  }
+  
+  private void buildDataSrcMap() {
+    dataSrcVecMap = Maps.newHashMap();
+    for (VectorWrapper<?> vw : incoming) {
+      String ds = vw.getField().getLastName();
+      
+      if (!datasrcs.contains(ds)) {
+        continue;
+      }
+      
+      assert !dataSrcVecMap.containsKey(ds);
+      Map<String, ValueVector> m = Maps.newHashMap();
+      dataSrcVecMap.put(ds, m);
+      
+      for (ValueVector vv : (MapVector) vw.getValueVector()) {
+        String k = vv.getField().getLastName();
+        
+        if (!keyList.contains(k)) {
+          throw new UnsupportedOperationException("Unpivot data vector " +
+              ds + " contains key " + k + " not contained in key source!");
+        }
+        
+        if (vv.getField().getType().getMinorType() == MinorType.MAP) {
+          throw new UnsupportedOperationException("Unpivot of nested map is " +
+              "not supported!");
+        }
+        
+        m.put(vv.getField().getLastName(), vv);
+      }
+    }
+  }
+  
+  private void prepareTransfers() {
     container.clear();
-
+    
+    transferList = Lists.newArrayList();
+    transferSrcList = Lists.newArrayList();
+    for (VectorWrapper<?> vw : incoming) {
+      String col = vw.getField().getLastName();
+      
+      ValueVector vv;
+      TransferPair tp;
+      if (datasrcs.contains(col)) {
+        String k = keyList.get(keyIndex);
+        vv = dataSrcVecMap.get(col).get(k);
+        tp = vv.getTransferPair(new FieldReference(col));
+      } else {
+        vv = vw.getValueVector();
+        tp = vv.getTransferPair(new FieldReference(col));
+      }
+      
+      container.add(tp.getTo());
+      transferSrcList.add(vv);
+      transferList.add(tp);
+    }
+    
+    container.buildSchema(incoming.getSchema().getSelectionVectorMode());
+  }
+  
+  @Override
+  protected void setupNewSchema() throws SchemaChangeException {
     if(incoming.getSchema().getSelectionVectorMode() != SelectionVectorMode.NONE){
       throw new UnsupportedOperationException("Selection vector not supported with statsPivot");
     }
     
-    MajorType vctype = MajorType.newBuilder()
-        .setMode(DataMode.REQUIRED)
-        .setMinorType(MinorType.VARCHAR)
-        .build();
-//    keyvector = (VarCharVector) TypeHelper.getNewVector(
-//        MaterializedField.create(flattendest, vctype),
-//        oContext.getAllocator());
-//    container.add(keyvector);
-    
-    MapVector mv = null;
-    for (VectorWrapper<?> vw : incoming) {
-      if (vw.getField().getLastName() == flattensrc) {
-        if (mv != null) {
-          throw new UnsupportedOperationException("multiple " + flattensrc + " found!");
-        } else if (!(vw.getValueVector() instanceof MapVector)) {
-          throw new UnsupportedOperationException("flatten not supported for type " + vw.getValueVector().getClass());
-        }
-        
-        mv = (MapVector) vw.getValueVector();
-        for (ValueVector vv : mv) {
-          mapkeys.add(vv.getField().getLastName());
-        }
-      }
-      
-      System.out.println(vw.getField().getPath());
-      TransferPair tp = vw.getValueVector().getTransferPair(
-          new FieldReference(vw.getField().getPath()));
-      container.add(tp.getTo());
-      transfers.add(tp);
-    }
-    
-    container.buildSchema(incoming.getSchema().getSelectionVectorMode());
+    buildKeyList();
+    buildDataSrcMap();
+    prepareTransfers();
   }
 }

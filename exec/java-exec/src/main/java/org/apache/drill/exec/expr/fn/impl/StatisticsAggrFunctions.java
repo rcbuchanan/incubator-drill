@@ -67,7 +67,7 @@ import com.clearspring.analytics.stream.cardinality.HyperLogLog;
 @SuppressWarnings("unused")
 public class StatisticsAggrFunctions {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StatisticsAggrFunctions.class);
-
+  
   @FunctionTemplate(name = "statcount", scope = FunctionTemplate.FunctionScope.POINT_AGGREGATE)
   public static class StatCount implements DrillAggFunc {
     @Param FieldReader in;

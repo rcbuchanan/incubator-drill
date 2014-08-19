@@ -53,7 +53,6 @@ public class DrillScanRelMdProvider {
   }
   
   public Double getRowCount(ScanPrel prel) {
-    System.out.println("Returning row count");
     return prel.getDrillTable().getDrillTableMetadata() == null ? null : prel.getDrillTable().getDrillTableMetadata().getRowCount();
   }
   
