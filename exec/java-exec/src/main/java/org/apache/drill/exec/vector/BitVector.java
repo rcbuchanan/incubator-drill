@@ -202,6 +202,7 @@ public final class BitVector extends BaseDataValueVector implements FixedWidthVe
         target.data.setByte(byteSize - 1,
             (((this.data.getByte(firstByte + byteSize - 1) & 0xFF) >>> offset) + (this.data.getByte(firstByte + byteSize) <<  (8 - offset))));
     }
+    target.valueCount = length;
   }
 
 
