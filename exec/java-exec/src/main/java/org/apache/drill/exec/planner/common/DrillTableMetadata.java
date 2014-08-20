@@ -57,30 +57,8 @@ public class DrillTableMetadata {
     this.statsTableString = statsTableString;
   }
   
-  public Double getPopulationSize(List<RelColumnOrigin> cols, BitSet groupKey) {
-    if (cols.size() == 0) {
-      System.out.println("Something bad happened.");
-      return null;
-    }
-    
-    List<RelDataTypeField> fl = cols.get(0).getOriginTable().getRowType().getFieldList();
-    double guess = 0.0;
-    
-    for (int i = 0; i < cols.size(); i++) {
-      String col = fl.get(cols.get(0).getOriginColumnOrdinal()).getName().toUpperCase();
-
-      guess += 1 / ((double) ndv.get(col));
-    }
-    
-    guess /= cols.size();
-    guess = 1 / guess;
-    
-    return new Double(guess);
-    
-//    String col = cols.get(0).getOriginTable().getRowType().getFieldList().get(cols.get(0).getOriginColumnOrdinal()).getName().toUpperCase();
-//    
-//    System.out.println(col + " " + ndv.containsKey(col) + " " + ndv.size());
-//    return ndv.containsKey(col) ? new Double(ndv.get(col)) : null;
+  public Long getNdv(String col) {
+    return ndv.containsKey(col.toUpperCase()) ? ndv.get(col.toUpperCase()) : null;
   }
   
   public Double getRowCount() {

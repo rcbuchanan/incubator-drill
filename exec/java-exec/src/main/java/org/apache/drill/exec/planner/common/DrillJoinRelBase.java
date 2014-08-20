@@ -29,6 +29,7 @@ import org.eigenbase.rel.JoinRel;
 import org.eigenbase.rel.JoinRelBase;
 import org.eigenbase.rel.JoinRelType;
 import org.eigenbase.rel.RelNode;
+import org.eigenbase.rel.metadata.RelMdUtil;
 import org.eigenbase.rel.metadata.RelMetadataQuery;
 import org.eigenbase.relopt.RelOptCluster;
 import org.eigenbase.relopt.RelOptCost;
@@ -72,31 +73,21 @@ public abstract class DrillJoinRelBase extends JoinRelBase implements DrillRelNo
   public double getRows() {
     int[] joinFields = new int[2];
     if (analyzeSimpleEquiJoin(this, joinFields)) {
-      BitSet left = new BitSet();
-      BitSet right = new BitSet();
-      left.set(joinFields[0]);
-      right.set(joinFields[1]);
+      BitSet leq = new BitSet();
+      BitSet  req = new BitSet();
+      leq.set(joinFields[0]);
+      req.set(joinFields[1]);
       
-      Double leftsel = RelMetadataQuery.getPopulationSize(this.getLeft(), left);
-      Double rightsel = RelMetadataQuery.getPopulationSize(this.getRight(), right);
-      double leftcount = RelMetadataQuery.getRowCount(this.getLeft());
-      double rightcount = RelMetadataQuery.getRowCount(this.getRight());
-
-//      System.out.print(
-//          ((leftrows != null || rightrows != null) ? (this + "\n") : "") +
-//          ((leftrows != null) ? ("    " + leftrows + ", " + this.getLeft() + "\n") : "") +
-//          ((rightrows != null) ? ("    " + rightrows + ", " + this.getRight() + "\n") : ""));
-      if (leftsel != null && rightsel != null) {
-        return Math.min(leftsel / leftcount, rightsel / rightcount) * leftcount * rightcount;
+      Double ldrc = RelMetadataQuery.getDistinctRowCount(this.getLeft(), leq, null);
+      Double rdrc = RelMetadataQuery.getDistinctRowCount(this.getRight(), req, null);
+      
+      Double lrc = RelMetadataQuery.getRowCount(this.getLeft());
+      Double rrc = RelMetadataQuery.getRowCount(this.getRight());
+      
+      if (ldrc != null && rdrc != null && lrc != null && rrc != null) {
+        return (lrc * rrc) / Math.max(ldrc, rdrc);
       }
-      
-      return joinRowFactor * Math.max(leftcount, rightcount);
     }
-    
-
-//    System.out.print(this + "\n" +
-//        "    " + this.getLeft() + "\n" +
-//        "    " + this.getRight() + "\n");
     
     return joinRowFactor * Math.max(
         RelMetadataQuery.getRowCount(left),

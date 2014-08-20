@@ -35,6 +35,7 @@ import org.apache.drill.exec.ops.QueryContext;
 import org.apache.drill.exec.physical.PhysicalPlan;
 import org.apache.drill.exec.physical.base.AbstractPhysicalVisitor;
 import org.apache.drill.exec.physical.base.PhysicalOperator;
+import org.apache.drill.exec.planner.common.DrillRelMdProviderSpy;
 import org.apache.drill.exec.planner.common.DrillScanRelMdProvider;
 import org.apache.drill.exec.planner.common.DrillTableMetadata;
 import org.apache.drill.exec.planner.logical.DrillRel;
@@ -148,6 +149,7 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
     relNode.getCluster().setMetadataProvider(
     ChainedRelMetadataProvider.of(
         Lists.newArrayList(
+            DrillRelMdProviderSpy.SOURCE,
             DrillScanRelMdProvider.SOURCE,
             relNode.getCluster().getMetadataProvider())));
 //    relNode.getCluster().setMetadataProvider(
@@ -160,6 +162,8 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
 
     RelNode convertedRelNode = planner.transform(DrillSqlWorker.LOGICAL_RULES,
         relNode.getTraitSet().plus(DrillRel.DRILL_LOGICAL), relNode);
+    
+    new DrillRelMdProviderSpy.MdProviderSpyVisitor().go(convertedRelNode);
     
     if (convertedRelNode instanceof DrillStoreRel) {
       throw new UnsupportedOperationException();

@@ -58,6 +58,8 @@ public class DrillScanRelMdProvider {
           ReflectiveRelMetadataProvider.reflectiveSource(
               BuiltinMethod.POPULATION_SIZE.method, SINGLETON),
           ReflectiveRelMetadataProvider.reflectiveSource(
+                  BuiltinMethod.DISTINCT_ROW_COUNT.method, SINGLETON),
+          ReflectiveRelMetadataProvider.reflectiveSource(
               BuiltinMethod.ROW_COUNT.method, SINGLETON),
           ReflectiveRelMetadataProvider.reflectiveSource(
               BuiltinMethod.COLUMN_ORIGIN.method, SINGLETON)));
@@ -67,106 +69,82 @@ public class DrillScanRelMdProvider {
   public Double getRowCount(DrillScanRel rel) {
     return rel.getDrillTable().getDrillTableMetadata() == null ? null : rel.getDrillTable().getDrillTableMetadata().getRowCount();
   }
-  
-  public Double getRowCount(ScanPrel prel) {
-    return prel.getDrillTable().getDrillTableMetadata() == null ? null : prel.getDrillTable().getDrillTableMetadata().getRowCount();
-  }
-  
-  public Double getPopulationSize(
-      RelSubset rel,
-      BitSet groupKey) {
-    return rel.getBest() != null ? RelMetadataQuery.getPopulationSize(rel.getBest(), groupKey) : null;
-  }
-  
 
-//Catch-all rule when none of the others apply.
-  public Set<RelColumnOrigin> getColumnOrigins(
-     RelNode rel,
-     int iOutputColumn) {
-   // NOTE jvs 28-Mar-2006: We may get this wrong for a physical table
-   // expression which supports projections.  In that case,
-   // it's up to the plugin writer to override with the
-   // correct information.
-
-   if (rel.getInputs().size() > 0) {
-     // No generic logic available for non-leaf rels.
-     return null;
-   }
-
-   Set<RelColumnOrigin> set = new HashSet<RelColumnOrigin>();
-
-   RelOptTable table = rel.getTable();
-   if (table == null) {
-     // Somebody is making column values up out of thin air, like a
-     // VALUES clause, so we return an empty set.
-     return set;
-   }
-
-   // Detect the case where a physical table expression is performing
-   // projection, and say we don't know instead of making any assumptions.
-   // (Theoretically we could try to map the projection using column
-   // names.)  This detection assumes the table expression doesn't handle
-   // rename as well.
-   if (table.getRowType() != rel.getRowType()) {
-     iOutputColumn++;
-   }
-
-   set.add(new RelColumnOrigin(table, iOutputColumn, false));
-   return set;
- }
-
-  public Double getPopulationSize(
-      DrillScanRel rel,
-      BitSet groupKey) {
+  public Double getDistinctRowCount(
+      DrillScanRelBase rel,
+      BitSet groupKey,
+      RexNode predicate) {
     List<RelColumnOrigin> cols = Lists.newArrayList();
     
     if (groupKey.length() == 0) {
-      //System.out.println(rel);
-      //System.out.println("No columns for population?");
-      //return null;
       return new Double(0);
     }
     
+    if (rel.getDrillTable() == null) {
+      return null;
+    }
+    
+    DrillTableMetadata md = rel.getDrillTable().getDrillTableMetadata();
+    
+    if (md == null) {
+      return null;
+    }
+    
+    double rc = RelMetadataQuery.getRowCount(rel);
+    double s = 1.0;
     for (int i = 0; i < groupKey.length(); i++) {
-      if (!groupKey.get(i)) {
+      String n = rel.getRowType().getFieldNames().get(i);
+      if (!groupKey.get(i) && !n.equals("*")) {
         continue;
       }
       
-      RelColumnOrigin col = RelMetadataQuery.getColumnOrigin(rel, i);
-      if (col == null) {
-        System.out.println("null col found in rel");
+      Long l = md.getNdv(n);
+      if (l == null) {
+        continue;
       }
-      cols.add(col);
+      
+      s *= 1 - l / rc;
     }
-    
-    return rel.getDrillTable().getDrillTableMetadata() == null ? null :
-        rel.getDrillTable().getDrillTableMetadata().getPopulationSize(cols, groupKey);
+    return new Double(s * rc);
   }
   
-  public Double getPopulationSize(
+  public Double getDistinctRowCount(
       ScanPrel prel,
-      BitSet groupKey) {
+      BitSet groupKey,
+      RexNode predicate) {
+    //TODO: move this code into the other thing!!!
     List<RelColumnOrigin> cols = Lists.newArrayList();
     
     if (groupKey.length() == 0) {
-//      System.out.println("No columns for population?");
-//      return null;
       return new Double(0);
     }
     
+    if (prel.getDrillTable() == null) {
+      return null;
+    }
+    
+    DrillTableMetadata md = prel.getDrillTable().getDrillTableMetadata();
+    
+    if (md == null) {
+      return null;
+    }
+    
+    double rc = RelMetadataQuery.getRowCount(prel);
+    double s = 1.0;
     for (int i = 0; i < groupKey.length(); i++) {
-      if (!groupKey.get(i)) {
+      String n = prel.getRowType().getFieldNames().get(i);
+      if (!groupKey.get(i) && !n.equals("*")) {
         continue;
       }
       
-      RelColumnOrigin col = RelMetadataQuery.getColumnOrigin(prel, i);
-      if (col == null) {
-        return null;
+      Long l = md.getNdv(n);
+      if (l == null) {
+        continue;
       }
-      cols.add(col);
+      
+      s *= 1 - l / rc;
     }
-    
-    return prel.getDrillTable().getDrillTableMetadata() == null ? null :
-        prel.getDrillTable().getDrillTableMetadata().getPopulationSize(cols, groupKey);
+    return new Double(s * rc);
   }
+  
 }

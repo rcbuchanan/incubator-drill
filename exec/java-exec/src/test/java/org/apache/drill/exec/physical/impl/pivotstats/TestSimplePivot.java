@@ -81,7 +81,7 @@ public class TestSimplePivot extends BaseTestQuery {
 //    results = testSqlWithResults("analyze table dfs.tmp.`region.parquet` compute statistics for all columns");
 //    results = testSqlWithResults("analyze table dfs.tmp.`part.parquet` compute statistics for all columns");
 //    results = testSqlWithResults("analyze table dfs.tmp.`supplier.parquet` compute statistics for all columns");
-    
+//    
     String q1 =
         "select\n" +
         "  supp_nation,\n" +
@@ -123,7 +123,11 @@ public class TestSimplePivot extends BaseTestQuery {
         "  cust_nation,\n" +
         "  l_year\n";
     
-    String q2 = "select * from dfs.tmp.`nation.parquet` as n, dfs.tmp.`supplier.parquet` s where s.`s_nationkey` = n.`n_nationkey` limit 30";
+    //String q2 = "select count(*) from dfs.tmp.`orders.parquet` o, dfs.tmp.`supplier.parquet` s, dfs.tmp.`lineitem.parquet` l where s.s_suppkey = l.l_suppkey and l.l_shipdate between date '1995-01-01' and date '1996-12-31' and o.o_orderkey = l.l_orderkey";a
+    //String q2 = "select count(*) from dfs.tmp.`part.parquet` p, dfs.tmp.`lineitem.parquet` l where l.l_shipdate between date '1995-01-01' and date '1996-12-31' and p.p_partkey = l.l_orderkey";
+    String q2 = "select count(*) from dfs.tmp.`part.parquet` p, dfs.tmp.`lineitem.parquet` l where p.p_partkey = l.l_orderkey";
+    //String q2 = "select count(*) from dfs.tmp.`lineitem.parquet` l where l.l_shipdate between date '1995-01-01' and date '1996-12-31'";
+//    String q2 = "select n.`n_name`, r.`r_name` from dfs.tmp.`nation.parquet` n, dfs.tmp.`region.parquet` r where n.`n_nationkey` = r.`r_regionkey`";
     results = testSqlWithResults(q2);
     
     //results = testSqlWithResults("select * from dfs.tmp.`test1.json` t1 inner join dfs.tmp.`test2.json` t2 on t1.color = t2.color inner join dfs.tmp.`test3.json` t3 on t1.adj = t3.adj");

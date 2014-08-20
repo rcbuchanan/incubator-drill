@@ -190,17 +190,26 @@ public class DrillRelMdProviderSpy {
         RelNode node,
         int ordinal,
         RelNode parent) {
-      System.out.println("VISITING " + node);
+      System.out.println("****** " + node + " (" + node.getId() + ") ******");
 
       DrillRelMdProviderSpy.begin();
-      RelMetadataQuery.getRowCount(node);
-      printstuff("Row count report", DrillRelMdProviderSpy.end());
+      Double rc = RelMetadataQuery.getRowCount(node);
+      printstuff("* ROW COUNT = " + rc, DrillRelMdProviderSpy.end());
       
       DrillRelMdProviderSpy.begin();
-      RelMetadataQuery.getSelectivity(node, null);
-      printstuff("Selectivity report", DrillRelMdProviderSpy.end());
+      Double sel = RelMetadataQuery.getSelectivity(node, null);
+      printstuff("* SELECTIVITY = " + sel, DrillRelMdProviderSpy.end());
       
-
+      for (int i = 0; i < node.getRowType().getFieldCount(); i++) {
+        BitSet bs = new BitSet();
+        bs.set(i);
+        DrillRelMdProviderSpy.begin();
+        Double ndv = RelMetadataQuery.getDistinctRowCount(node, bs, null);
+        printstuff("* DISTINCT ROW COUNT " + i + " (\"" + node.getRowType().getFieldNames().get(i) + "\") = " + ndv, DrillRelMdProviderSpy.end());
+      }
+      
+      System.out.println();
+      System.out.println();
       
       super.visit(node, ordinal, parent);
     }
