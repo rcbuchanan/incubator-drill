@@ -6,7 +6,7 @@
       workspaces: {
         "root" : {
           location: "/",
-          writable: false
+          writable: true
         },
         "tmp" : {
           location: "/tmp",

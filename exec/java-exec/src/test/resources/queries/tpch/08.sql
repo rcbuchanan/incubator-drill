@@ -1,5 +1,4 @@
--- tpch8 using 1395599672 as a seed to the RNG
-select
+explain plan including all attributes for select
   o_year,
   sum(case
     when nation = 'EGYPT' then volume
@@ -12,14 +11,14 @@ from
       l.l_extendedprice * (1 - l.l_discount) as volume,
       n2.n_name as nation
     from
-      cp.`tpch/part.parquet` p,
-      cp.`tpch/supplier.parquet` s,
-      cp.`tpch/lineitem.parquet` l,
-      cp.`tpch/orders.parquet` o,
-      cp.`tpch/customer.parquet` c,
-      cp.`tpch/nation.parquet` n1,
-      cp.`tpch/nation.parquet` n2,
-      cp.`tpch/region.parquet` r
+      dfs.tmp.`part.parquet` p,
+      dfs.tmp.`supplier.parquet` s,
+      dfs.tmp.`lineitem.parquet` l,
+      dfs.tmp.`orders.parquet` o,
+      dfs.tmp.`customer.parquet` c,
+      dfs.tmp.`nation.parquet` n1,
+      dfs.tmp.`nation.parquet` n2,
+      dfs.tmp.`region.parquet` r
     where
       p.p_partkey = l.l_partkey
       and s.s_suppkey = l.l_suppkey

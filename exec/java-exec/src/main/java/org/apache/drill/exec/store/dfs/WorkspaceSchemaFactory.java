@@ -239,7 +239,11 @@ public class WorkspaceSchemaFactory implements ExpandingConcurrentMap.MapValueFa
     public Table getTable(String name) {
       // first check existing tables.
       if(tables.alreadyContainsKey(name)) {
-        tables.get(name).setDrillTableMetadata(new DrillTableMetadata(getTableStatsTable(name), getTableStatsTableString(name)));
+        if (getTableStatsTable(name) != null && tables.get(name).getDrillTableMetadata() == null) {
+          tables.get(name).setDrillTableMetadata(new DrillTableMetadata(getTableStatsTable(name), getTableStatsTableString(name)));
+        } else {
+          tables.get(name).setDrillTableMetadata(null);
+        }
         return tables.get(name);
       }
 
@@ -261,7 +265,11 @@ public class WorkspaceSchemaFactory implements ExpandingConcurrentMap.MapValueFa
       }
 
       if (tables.alreadyContainsKey(name)) {
-        tables.get(name).setDrillTableMetadata(new DrillTableMetadata(getTableStatsTable(name), getTableStatsTableString(name)));
+        if (getTableStatsTable(name) != null && tables.get(name).getDrillTableMetadata() == null) {
+          tables.get(name).setDrillTableMetadata(new DrillTableMetadata(getTableStatsTable(name), getTableStatsTableString(name)));
+        } else {
+          tables.get(name).setDrillTableMetadata(null);
+        }
       }
       return tables.get(name);
 

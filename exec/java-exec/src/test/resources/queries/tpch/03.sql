@@ -1,14 +1,13 @@
--- tpch3 using 1395599672 as a seed to the RNG
-select
+explain plan including all attributes for select
   l.l_orderkey,
   sum(l.l_extendedprice * (1 - l.l_discount)) as revenue,
   o.o_orderdate,
   o.o_shippriority
 
 from
-  cp.`tpch/customer.parquet` c,
-  cp.`tpch/orders.parquet` o,
-  cp.`tpch/lineitem.parquet` l
+  dfs.tmp.`customer.parquet` c,
+  dfs.tmp.`orders.parquet` o,
+  dfs.tmp.`lineitem.parquet` l
 
 where
   c.c_mktsegment = 'HOUSEHOLD'

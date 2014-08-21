@@ -1,5 +1,4 @@
--- tpch13 using 1395599672 as a seed to the RNG
-select
+explain plan including all attributes for select
   c_count,
   count(*) as custdist
 from
@@ -8,8 +7,8 @@ from
       c.c_custkey,
       count(o.o_orderkey)
     from
-      cp.`tpch/customer.parquet` c 
-      left outer join cp.`tpch/orders.parquet` o 
+      dfs.tmp.`customer.parquet` c 
+      left outer join dfs.tmp.`orders.parquet` o 
         on c.c_custkey = o.o_custkey
         and o.o_comment not like '%special%requests%'
     group by

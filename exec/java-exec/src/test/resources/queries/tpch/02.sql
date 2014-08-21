@@ -1,5 +1,4 @@
--- tpch2 using 1395599672 as a seed to the RNG
-select
+explain plan including all attributes for select
   s.s_acctbal,
   s.s_name,
   n.n_name,
@@ -9,11 +8,11 @@ select
   s.s_phone,
   s.s_comment
 from
-  cp.`tpch/part.parquet` p,
-  cp.`tpch/supplier.parquet` s,
-  cp.`tpch/partsupp.parquet` ps,
-  cp.`tpch/nation.parquet` n,
-  cp.`tpch/region.parquet` r
+  dfs.tmp.`part.parquet` p,
+  dfs.tmp.`supplier.parquet` s,
+  dfs.tmp.`partsupp.parquet` ps,
+  dfs.tmp.`nation.parquet` n,
+  dfs.tmp.`region.parquet` r
 where
   p.p_partkey = ps.ps_partkey
   and s.s_suppkey = ps.ps_suppkey
@@ -28,10 +27,10 @@ where
       min(ps.ps_supplycost)
 
     from
-      cp.`tpch/partsupp.parquet` ps,
-      cp.`tpch/supplier.parquet` s,
-      cp.`tpch/nation.parquet` n,
-      cp.`tpch/region.parquet` r
+      dfs.tmp.`partsupp.parquet` ps,
+      dfs.tmp.`supplier.parquet` s,
+      dfs.tmp.`nation.parquet` n,
+      dfs.tmp.`region.parquet` r
     where
       p.p_partkey = ps.ps_partkey
       and s.s_suppkey = ps.ps_suppkey

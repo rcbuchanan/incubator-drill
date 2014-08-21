@@ -36,6 +36,9 @@ import org.apache.drill.exec.server.rest.QueryWrapper;
 import org.apache.drill.exec.server.rest.QueryWrapper.Listener;
 import org.eigenbase.rel.RelNode;
 import org.eigenbase.rel.RelVisitor;
+import org.eigenbase.rel.TableAccessRelBase;
+import org.eigenbase.rel.metadata.RelColumnOrigin;
+import org.eigenbase.rel.metadata.RelMetadataQuery;
 import org.eigenbase.reltype.RelDataTypeFactory;
 import org.eigenbase.reltype.RelDataTypeField;
 
@@ -43,8 +46,10 @@ public class DrillTableMetadata {
   private Table statsTable;
   private String statsTableString;
   List<Map<String, Object>> result;
-  Map<String, Long> ndv;
+  Map<String, Long> ndv = new HashMap<String, Long>();
+  Map<String, Long> count;
   double rowcount = -1;
+  boolean materialized = false;
   
   public DrillTableMetadata(Table statsTable, String statsTableString) {
     // TODO: this should actually be a Table object or a selection or something instead of a string
@@ -52,33 +57,22 @@ public class DrillTableMetadata {
     this.statsTableString = statsTableString;
   }
   
+  public Long getNdv(String col) {
+    return ndv.containsKey(col.toUpperCase()) ? ndv.get(col.toUpperCase()) : null;
+  }
+  
   public Double getRowCount() {
     return rowcount > 0 ? new Double(rowcount) : null;
   }
   
-  public Double getDistinctRowCount(List<RelDataTypeField> fields, BitSet selection) {
-    if (ndv == null) {
-      return null;
-    } else if (selection.cardinality() == 0) {
-      System.out.println("ignoring request for NDV for empty bitset");
-      return null;
-    } else if (selection.cardinality() > 1) {
-      System.out.println("ignoring request for joint NDV");
-      return null;
-    }
-    
-    int n = selection.length() - 1;
-    
-    if (n > 0 && n < fields.size()) {
-      return new Double(ndv.get(fields.get(n).getName()));
-    } else {
-      return null;
-    }
-  }
-  
   public void materialize(QueryContext context) throws Exception {
-    if (statsTableString == null || statsTable == null)
+    if (materialized) {
       return;
+    } else if (statsTableString == null || statsTable == null) {
+      return;
+    }
+    
+    materialized = true;
 
     String sql = "select a.* from " + statsTableString +
             " as a natural inner join" +
@@ -99,10 +93,10 @@ public class DrillTableMetadata {
     result = listener.waitForCompletion();
     client.close();
     
-    ndv = new HashMap<String, Long>();
     for (Map<String, Object> r : result) {
-      ndv.put((String) r.get("column"), (Long) r.get("ndv"));
-      rowcount = Math.max(rowcount, r.containsKey("statcount") ? (Long) r.get("statcount") : 0);
+      System.out.println("PUTTING " + ((String) r.get("column")).toUpperCase());
+      ndv.put(((String) r.get("column")).toUpperCase(), (Long) r.get("ndv"));
+      rowcount = Math.max(rowcount, (Long) r.get("statcount"));
     }
     System.out.println("build hash map!");
   }
@@ -122,11 +116,11 @@ public class DrillTableMetadata {
         RelNode node,
         int ordinal,
         RelNode parent) {
-      if (node instanceof DrillScanRel) {
+      if (node instanceof TableAccessRelBase) {
         try {
-          DrillScanRel dsr = (DrillScanRel) node;
-          if (dsr.getDrillTable().getDrillTableMetadata() != null) {
-            dsr.getDrillTable().getDrillTableMetadata().materialize(context);
+          DrillTable dt = ((TableAccessRelBase) node).getTable().unwrap(DrillTable.class);
+          if (dt.getDrillTableMetadata() != null) {
+            dt.getDrillTableMetadata().materialize(context);
           }
         } catch (Exception e) {
           System.out.println("Materialization failed!!");

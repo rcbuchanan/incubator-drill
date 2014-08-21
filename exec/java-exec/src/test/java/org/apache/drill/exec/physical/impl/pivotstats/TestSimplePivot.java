@@ -72,13 +72,66 @@ public class TestSimplePivot extends BaseTestQuery {
   @Test
   public void pivot(@Injectable final DrillbitContext bitContext, @Injectable UserClientConnection connection) throws Throwable{
     List<QueryResultBatch> results;
-    //results = testPhysicalWithResults(Files.toString(FileUtils.getResourceAsFile("/statspivot/test1.json"), Charsets.UTF_8));
-    //results = testSqlWithResults("select rfields(`employee_id`) from cp.`employee.json` limit 5");
-    //results = testSqlWithResults("select hll_decode(hll(`employee_id`)) from cp.`employee.json`");
-    results = testSqlWithResults("analyze table dfs.tmp.`test.json` compute statistics for all columns");
-    //results = testSqlWithResults("select * from dfs.tmp.`test.json`");
+    
+//    results = testSqlWithResults("analyze table dfs.tmp.`customer.parquet` compute statistics for all columns");
+//    results = testSqlWithResults("analyze table dfs.tmp.`nation.parquet` compute statistics for all columns");
+//    results = testSqlWithResults("analyze table dfs.tmp.`lineitem.parquet` compute statistics for all columns");
+//    results = testSqlWithResults("analyze table dfs.tmp.`orders.parquet` compute statistics for all columns");
+//    results = testSqlWithResults("analyze table dfs.tmp.`partsupp.parquet` compute statistics for all columns");
+//    results = testSqlWithResults("analyze table dfs.tmp.`region.parquet` compute statistics for all columns");
+//    results = testSqlWithResults("analyze table dfs.tmp.`part.parquet` compute statistics for all columns");
+//    results = testSqlWithResults("analyze table dfs.tmp.`supplier.parquet` compute statistics for all columns");
+//    
+    String q1 =
+        "select\n" +
+        "  supp_nation,\n" +
+        "  cust_nation,\n" +
+        "  l_year,\n" +
+        "  sum(volume) as revenue\n" +
+        "from\n" +
+        "  (\n" +
+        "    select\n" +
+        "      n1.n_name as supp_nation,\n" +
+        "      n2.n_name as cust_nation,\n" +
+        "      extract(year from l.l_shipdate) as l_year,\n" +
+        "      l.l_extendedprice * (1 - l.l_discount) as volume\n" +
+        "    from\n" +
+        "      dfs.tmp.`supplier.parquet` s,\n" +
+        "      dfs.tmp.`lineitem.parquet` l,\n" +
+        "      dfs.tmp.`orders.parquet` o,\n" +
+        "      dfs.tmp.`customer.parquet` c,\n" +
+        "      dfs.tmp.`nation.parquet` n1,\n" +
+        "      dfs.tmp.`nation.parquet` n2\n" +
+        "    where\n" +
+        "      s.s_suppkey = l.l_suppkey\n" +
+        "      and o.o_orderkey = l.l_orderkey\n" +
+        "      and c.c_custkey = o.o_custkey\n" +
+        "      and s.s_nationkey = n1.n_nationkey\n" +
+        "      and c.c_nationkey = n2.n_nationkey\n" +
+        "      and (\n" +
+        "        (n1.n_name = 'EGYPT' and n2.n_name = 'UNITED STATES')\n" +
+        "        or (n1.n_name = 'UNITED STATES' and n2.n_name = 'EGYPT')\n" +
+        "      )\n" +
+        "      and l.l_shipdate between date '1995-01-01' and date '1996-12-31'\n" +
+        "  ) as shipping\n" +
+        "group by\n" +
+        "  supp_nation,\n" +
+        "  cust_nation,\n" +
+        "  l_year\n" +
+        "order by\n" +
+        "  supp_nation,\n" +
+        "  cust_nation,\n" +
+        "  l_year\n";
+    
+    //String q2 = "select count(*) from dfs.tmp.`orders.parquet` o, dfs.tmp.`supplier.parquet` s, dfs.tmp.`lineitem.parquet` l where s.s_suppkey = l.l_suppkey and l.l_shipdate between date '1995-01-01' and date '1996-12-31' and o.o_orderkey = l.l_orderkey";a
+    //String q2 = "select count(*) from dfs.tmp.`part.parquet` p, dfs.tmp.`lineitem.parquet` l where l.l_shipdate between date '1995-01-01' and date '1996-12-31' and p.p_partkey = l.l_orderkey";
+    String q2 = "select count(*) from dfs.tmp.`part.parquet` p, dfs.tmp.`lineitem.parquet` l where p.p_partkey = l.l_orderkey";
+    //String q2 = "select count(*) from dfs.tmp.`lineitem.parquet` l where l.l_shipdate between date '1995-01-01' and date '1996-12-31'";
+//    String q2 = "select n.`n_name`, r.`r_name` from dfs.tmp.`nation.parquet` n, dfs.tmp.`region.parquet` r where n.`n_nationkey` = r.`r_regionkey`";
+    results = testSqlWithResults(q2);
+    
     //results = testSqlWithResults("select * from dfs.tmp.`test1.json` t1 inner join dfs.tmp.`test2.json` t2 on t1.color = t2.color inner join dfs.tmp.`test3.json` t3 on t1.adj = t3.adj");
-    //setColumnWidth(10000);
+    setColumnWidth(100);
     printResult(results);
     //results = testSqlWithResults("select * from dfs.tmp.`test2.json` t2 inner join dfs.tmp.`test1.json` t1 on t2.color = t1.color");
     //printResult(results);

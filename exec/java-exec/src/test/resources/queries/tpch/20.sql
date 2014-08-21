@@ -1,22 +1,21 @@
--- tpch20 using 1395599672 as a seed to the RNG
-select
+explain plan including all attributes for select
   s.s_name,
   s.s_address
 from
-  cp.`tpch/supplier.parquet` s,
-  cp.`tpch/nation.parquet` n
+  dfs.tmp.`supplier.parquet` s,
+  dfs.tmp.`nation.parquet` n
 where
   s.s_suppkey in (
     select
       ps.ps_suppkey
     from
-      cp.`tpch/partsupp.parquet` ps
+      dfs.tmp.`partsupp.parquet` ps
     where
       ps. ps_partkey in (
         select
           p.p_partkey
         from
-          cp.`tpch/part.parquet` p
+          dfs.tmp.`part.parquet` p
         where
           p.p_name like 'antique%'
       )
@@ -24,7 +23,7 @@ where
         select
           0.5 * sum(l.l_quantity)
         from
-          cp.`tpch/lineitem.parquet` l
+          dfs.tmp.`lineitem.parquet` l
         where
           l.l_partkey = ps.ps_partkey
           and l.l_suppkey = ps.ps_suppkey

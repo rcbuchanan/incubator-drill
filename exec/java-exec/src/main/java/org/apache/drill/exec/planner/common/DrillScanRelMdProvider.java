@@ -19,17 +19,31 @@
 package org.apache.drill.exec.planner.common;
 
 import java.util.BitSet;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import net.hydromatic.optiq.BuiltinMethod;
 
 import org.apache.drill.exec.planner.logical.DrillScanRel;
 import org.apache.drill.exec.planner.physical.ScanPrel;
+import org.eigenbase.rel.FilterRel;
+import org.eigenbase.rel.JoinRelBase;
+import org.eigenbase.rel.RelNode;
+import org.eigenbase.rel.metadata.BuiltInMetadata.ColumnOrigin;
 import org.eigenbase.rel.metadata.ChainedRelMetadataProvider;
 import org.eigenbase.rel.metadata.ReflectiveRelMetadataProvider;
+import org.eigenbase.rel.metadata.RelColumnOrigin;
+import org.eigenbase.rel.metadata.RelMdUtil;
 import org.eigenbase.rel.metadata.RelMetadataProvider;
+import org.eigenbase.rel.metadata.RelMetadataQuery;
+import org.eigenbase.relopt.RelOptTable;
+import org.eigenbase.relopt.RelOptUtil;
+import org.eigenbase.relopt.volcano.RelSubset;
 import org.eigenbase.reltype.RelDataTypeField;
+import org.eigenbase.rex.RexCall;
 import org.eigenbase.rex.RexNode;
+import org.eigenbase.sql.SqlKind;
 
 import com.google.common.collect.Lists;
 
@@ -42,35 +56,95 @@ public class DrillScanRelMdProvider {
   public static final RelMetadataProvider SOURCE = ChainedRelMetadataProvider.of(
       Lists.newArrayList(
           ReflectiveRelMetadataProvider.reflectiveSource(
-              BuiltinMethod.DISTINCT_ROW_COUNT.method, SINGLETON),
+              BuiltinMethod.POPULATION_SIZE.method, SINGLETON),
           ReflectiveRelMetadataProvider.reflectiveSource(
-              BuiltinMethod.ROW_COUNT.method, SINGLETON)));
+                  BuiltinMethod.DISTINCT_ROW_COUNT.method, SINGLETON),
+          ReflectiveRelMetadataProvider.reflectiveSource(
+              BuiltinMethod.ROW_COUNT.method, SINGLETON),
+          ReflectiveRelMetadataProvider.reflectiveSource(
+              BuiltinMethod.COLUMN_ORIGIN.method, SINGLETON)));
   
   private DrillScanRelMdProvider() {}
   
   public Double getRowCount(DrillScanRel rel) {
     return rel.getDrillTable().getDrillTableMetadata() == null ? null : rel.getDrillTable().getDrillTableMetadata().getRowCount();
   }
-  
-  public Double getRowCount(ScanPrel prel) {
-    return prel.getDrillTable().getDrillTableMetadata() == null ? null : prel.getDrillTable().getDrillTableMetadata().getRowCount();
-  }
-  
+
   public Double getDistinctRowCount(
-      DrillScanRel rel,
+      DrillScanRelBase rel,
       BitSet groupKey,
       RexNode predicate) {
-    List<RelDataTypeField> fields = rel.getDrillTable().getRowType(rel.getCluster().getTypeFactory()).getFieldList();
-    return rel.getDrillTable().getDrillTableMetadata() == null ? null :
-        rel.getDrillTable().getDrillTableMetadata().getDistinctRowCount(fields, groupKey);
+    List<RelColumnOrigin> cols = Lists.newArrayList();
+    
+    if (groupKey.length() == 0) {
+      return new Double(0);
+    }
+    
+    if (rel.getDrillTable() == null) {
+      return null;
+    }
+    
+    DrillTableMetadata md = rel.getDrillTable().getDrillTableMetadata();
+    
+    if (md == null) {
+      return null;
+    }
+    
+    double rc = RelMetadataQuery.getRowCount(rel);
+    double s = 1.0;
+    for (int i = 0; i < groupKey.length(); i++) {
+      String n = rel.getRowType().getFieldNames().get(i);
+      if (!groupKey.get(i) && !n.equals("*")) {
+        continue;
+      }
+      
+      Long l = md.getNdv(n);
+      if (l == null) {
+        continue;
+      }
+      
+      s *= 1 - l / rc;
+    }
+    return new Double(s * rc);
   }
   
   public Double getDistinctRowCount(
       ScanPrel prel,
       BitSet groupKey,
       RexNode predicate) {
-    List<RelDataTypeField> fields = prel.getDrillTable().getRowType(prel.getCluster().getTypeFactory()).getFieldList();
-    return prel.getDrillTable().getDrillTableMetadata() == null ? null :
-        prel.getDrillTable().getDrillTableMetadata().getDistinctRowCount(fields, groupKey);
+    //TODO: move this code into the other thing!!!
+    List<RelColumnOrigin> cols = Lists.newArrayList();
+    
+    if (groupKey.length() == 0) {
+      return new Double(0);
+    }
+    
+    if (prel.getDrillTable() == null) {
+      return null;
+    }
+    
+    DrillTableMetadata md = prel.getDrillTable().getDrillTableMetadata();
+    
+    if (md == null) {
+      return null;
+    }
+    
+    double rc = RelMetadataQuery.getRowCount(prel);
+    double s = 1.0;
+    for (int i = 0; i < groupKey.length(); i++) {
+      String n = prel.getRowType().getFieldNames().get(i);
+      if (!groupKey.get(i) && !n.equals("*")) {
+        continue;
+      }
+      
+      Long l = md.getNdv(n);
+      if (l == null) {
+        continue;
+      }
+      
+      s *= 1 - l / rc;
+    }
+    return new Double(s * rc);
   }
+  
 }

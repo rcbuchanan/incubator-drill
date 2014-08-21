@@ -1,5 +1,4 @@
--- tpch18 using 1395599672 as a seed to the RNG
-select
+explain plan including all attributes for select
   c.c_name,
   c.c_custkey,
   o.o_orderkey,
@@ -7,15 +6,15 @@ select
   o.o_totalprice,
   sum(l.l_quantity)
 from
-  cp.`tpch/customer.parquet` c,
-  cp.`tpch/orders.parquet` o,
-  cp.`tpch/lineitem.parquet` l
+  dfs.tmp.`customer.parquet` c,
+  dfs.tmp.`orders.parquet` o,
+  dfs.tmp.`lineitem.parquet` l
 where
   o.o_orderkey in (
     select
       l_orderkey
     from
-      cp.`tpch/lineitem.parquet`
+      dfs.tmp.`lineitem.parquet`
     group by
       l_orderkey having
         sum(l_quantity) > 300

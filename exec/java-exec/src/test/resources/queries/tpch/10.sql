@@ -1,5 +1,4 @@
--- tpch10 using 1395599672 as a seed to the RNG
-select
+explain plan including all attributes for select
   c.c_custkey,
   c.c_name,
   sum(l.l_extendedprice * (1 - l.l_discount)) as revenue,
@@ -9,10 +8,10 @@ select
   c.c_phone,
   c.c_comment
 from
-  cp.`tpch/customer.parquet` c,
-  cp.`tpch/orders.parquet` o,
-  cp.`tpch/lineitem.parquet` l,
-  cp.`tpch/nation.parquet` n
+  dfs.tmp.`customer.parquet` c,
+  dfs.tmp.`orders.parquet` o,
+  dfs.tmp.`lineitem.parquet` l,
+  dfs.tmp.`nation.parquet` n
 where
   c.c_custkey = o.o_custkey
   and l.l_orderkey = o.o_orderkey
