@@ -105,6 +105,39 @@ public class StatisticsAggBatch extends StreamingAggBatch {
     }
   }
   
+  private void createKeyColumnSpecial(MapVector parent, String name, LogicalExpression expr, List<LogicalExpression> keyExprs, List<TypedFieldId> keyOutputIds) throws SchemaChangeException {
+    ErrorCollector collector = new ErrorCollectorImpl();
+    
+    LogicalExpression mle = ExpressionTreeMaterializer.materialize(
+        expr,
+        incoming,
+        collector,
+        context.getFunctionRegistry());
+    
+    Class<? extends ValueVector> vvc =
+        (Class<? extends ValueVector>) TypeHelper.getValueVectorClass(
+            mle.getMajorType().getMinorType(),
+            mle.getMajorType().getMode());
+    ValueVector vv = parent.addOrGet(name, mle.getMajorType(), vvc);
+    
+    TypedFieldId pfid = container.getValueVectorId(parent.getField().getPath());
+    assert pfid.getFieldIds().length == 1;
+    TypedFieldId.Builder builder = TypedFieldId.newBuilder();
+    builder.addId(pfid.getFieldIds()[0]);
+    TypedFieldId id = parent.getFieldIdIfMatches(
+        builder,
+        true,
+        vv.getField().getPath().getRootSegment().getChild());
+    
+    keyExprs.add(mle);
+    keyOutputIds.add(id);
+    
+    if(collector.hasErrors()) {
+      throw new SchemaChangeException(
+          "Failure while materializing expression. " + collector.toErrorString());
+    }
+  }
+  
   private void addMapVector(String name, MapVector parent, LogicalExpression expr, List<LogicalExpression> valueExprs) throws SchemaChangeException {
     ErrorCollector collector = new ErrorCollectorImpl();
     
@@ -185,6 +218,17 @@ public class StatisticsAggBatch extends StreamingAggBatch {
           createKeyColumn(k, mf.getPath(), keyExprs, keyOutputIds);
         }
       }
+    }
+    
+    MapVector cparent = new MapVector("column", oContext.getAllocator());
+    container.add(cparent);
+    for (MaterializedField mf : incoming.getSchema()) {
+      createKeyColumnSpecial(
+          cparent,
+          mf.getLastName(),
+          ValueExpressions.getChar(mf.getLastName()),
+          keyExprs,
+          keyOutputIds);
     }
 
     for (String func : funcs) {
