@@ -24,6 +24,7 @@ import java.util.List;
 import net.hydromatic.optiq.tools.RuleSet;
 
 import org.apache.drill.exec.ops.QueryContext;
+import org.apache.drill.exec.planner.physical.AnalyzePrule;
 import org.apache.drill.exec.planner.physical.ConvertCountToDirectScan;
 import org.apache.drill.exec.planner.physical.FilterPrule;
 import org.apache.drill.exec.planner.physical.HashAggPrule;
@@ -180,6 +181,7 @@ public class DrillRuleSets {
     ruleList.add(ScreenPrule.INSTANCE);
     ruleList.add(ExpandConversionRule.INSTANCE);
     ruleList.add(FilterPrule.INSTANCE);
+    ruleList.add(AnalyzePrule.INSTANCE);
     ruleList.add(LimitPrule.INSTANCE);
     ruleList.add(WriterPrule.INSTANCE);
     ruleList.add(PushLimitToTopN.INSTANCE);

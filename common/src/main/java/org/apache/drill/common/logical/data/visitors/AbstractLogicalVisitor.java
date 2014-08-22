@@ -17,6 +17,7 @@
  */
 package org.apache.drill.common.logical.data.visitors;
 
+import org.apache.drill.common.logical.data.Analyze;
 import org.apache.drill.common.logical.data.Constant;
 import org.apache.drill.common.logical.data.Filter;
 import org.apache.drill.common.logical.data.Flatten;
@@ -44,6 +45,11 @@ public abstract class AbstractLogicalVisitor<T, X, E extends Throwable> implemen
                 .getClass().getCanonicalName(), op.getClass().getCanonicalName()));
     }
 
+    @Override
+    public T visitAnalyze(Analyze analyze, X value) throws E {
+        return visitOp(analyze, value);
+    }
+    
     @Override
     public T visitScan(Scan scan, X value) throws E {
         return visitOp(scan, value);
