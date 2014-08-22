@@ -57,8 +57,8 @@ public class DrillTableMetadata {
     this.statsTableString = statsTableString;
   }
   
-  public Long getNdv(String col) {
-    return ndv.containsKey(col.toUpperCase()) ? ndv.get(col.toUpperCase()) : null;
+  public Double getNdv(String col) {
+    return ndv.containsKey(col.toUpperCase()) ? new Double(Math.min(ndv.get(col.toUpperCase()), rowcount)) : null;
   }
   
   public Double getRowCount() {

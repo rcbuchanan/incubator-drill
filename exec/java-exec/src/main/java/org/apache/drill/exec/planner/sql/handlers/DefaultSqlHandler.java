@@ -35,6 +35,8 @@ import org.apache.drill.exec.ops.QueryContext;
 import org.apache.drill.exec.physical.PhysicalPlan;
 import org.apache.drill.exec.physical.base.AbstractPhysicalVisitor;
 import org.apache.drill.exec.physical.base.PhysicalOperator;
+import org.apache.drill.exec.planner.common.DrillScanRelMdProvider;
+import org.apache.drill.exec.planner.common.DrillTableMetadata;
 import org.apache.drill.exec.planner.logical.DrillRel;
 import org.apache.drill.exec.planner.logical.DrillScreenRel;
 import org.apache.drill.exec.planner.logical.DrillStoreRel;
@@ -56,6 +58,7 @@ import org.apache.drill.exec.planner.physical.visitor.StarColumnConverter;
 import org.apache.drill.exec.planner.sql.DrillSqlWorker;
 import org.apache.drill.exec.util.Pointer;
 import org.eigenbase.rel.RelNode;
+import org.eigenbase.rel.metadata.ChainedRelMetadataProvider;
 import org.eigenbase.relopt.RelOptUtil;
 import org.eigenbase.relopt.RelTraitSet;
 import org.eigenbase.rex.RexBuilder;
@@ -142,6 +145,14 @@ public class DefaultSqlHandler extends AbstractSqlHandler {
   }
 
   protected DrillRel convertToDrel(RelNode relNode) throws RelConversionException {
+    relNode.getCluster().setMetadataProvider(
+    ChainedRelMetadataProvider.of(
+        Lists.newArrayList(
+            DrillScanRelMdProvider.SOURCE,
+            relNode.getCluster().getMetadataProvider())));
+
+    new DrillTableMetadata.MaterializationVisitor(context).go(relNode);
+
     RelNode convertedRelNode = planner.transform(DrillSqlWorker.LOGICAL_RULES,
         relNode.getTraitSet().plus(DrillRel.DRILL_LOGICAL), relNode);
     if (convertedRelNode instanceof DrillStoreRel) {
