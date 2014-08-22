@@ -17,22 +17,33 @@
  */
 package org.apache.drill.exec.planner.common;
 
+import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.drill.exec.planner.cost.DrillCostBase.DrillCostFactory;
 import org.apache.drill.exec.planner.physical.PrelUtil;
 import org.eigenbase.rel.InvalidRelException;
+import org.eigenbase.rel.JoinRel;
 import org.eigenbase.rel.JoinRelBase;
 import org.eigenbase.rel.JoinRelType;
 import org.eigenbase.rel.RelNode;
+import org.eigenbase.rel.metadata.RelMdUtil;
+import org.eigenbase.rel.metadata.RelMetadataQuery;
 import org.eigenbase.relopt.RelOptCluster;
 import org.eigenbase.relopt.RelOptCost;
 import org.eigenbase.relopt.RelOptPlanner;
+import org.eigenbase.relopt.RelOptUtil;
 import org.eigenbase.relopt.RelTraitSet;
+import org.eigenbase.relopt.volcano.RelSubset;
 import org.eigenbase.reltype.RelDataType;
+import org.eigenbase.rex.RexCall;
+import org.eigenbase.rex.RexInputRef;
 import org.eigenbase.rex.RexNode;
+import org.eigenbase.sql.SqlKind;
+import org.eigenbase.util14.NumberUtil;
 
 import com.google.common.collect.Lists;
 
@@ -58,11 +69,40 @@ public abstract class DrillJoinRelBase extends JoinRelBase implements DrillRelNo
     return super.computeSelfCost(planner);
   }
 
+
   @Override
   public double getRows() {
-    return joinRowFactor * Math.max(this.getLeft().getRows(), this.getRight().getRows());
+    int[] joinFields = new int[2];
+    
+    JoinRel jr = new JoinRel(
+        this.getCluster(),
+        this.getLeft(),
+        this.getRight(),
+        this.getCondition(),
+        this.getJoinType(),
+        this.getVariablesStopped());
+    
+    if (RelOptUtil.analyzeSimpleEquiJoin(jr, joinFields)) {
+      BitSet leq = new BitSet();
+      BitSet  req = new BitSet();
+      leq.set(joinFields[0]);
+      req.set(joinFields[1]);
+      
+      Double ldrc = RelMetadataQuery.getDistinctRowCount(this.getLeft(), leq, null);
+      Double rdrc = RelMetadataQuery.getDistinctRowCount(this.getRight(), req, null);
+      
+      Double lrc = RelMetadataQuery.getRowCount(this.getLeft());
+      Double rrc = RelMetadataQuery.getRowCount(this.getRight());
+      
+      if (ldrc != null && rdrc != null && lrc != null && rrc != null) {
+        return (lrc * rrc) / Math.max(ldrc, rdrc);
+      }
+    }
+    
+    return joinRowFactor * Math.max(
+        RelMetadataQuery.getRowCount(left),
+        RelMetadataQuery.getRowCount(right));
   }
-
   /**
    * Returns whether there are any elements in common between left and right.
    */
