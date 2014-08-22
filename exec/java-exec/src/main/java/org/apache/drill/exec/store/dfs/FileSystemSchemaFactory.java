@@ -136,6 +136,11 @@ public class FileSystemSchemaFactory implements SchemaFactory{
     public CreateTableEntry createNewTable(String tableName) {
       return defaultSchema.createNewTable(tableName);
     }
+    
+    @Override
+    public CreateTableEntry appendToTable(String tableName) {
+      return defaultSchema.appendToTable(tableName);
+    }
 
     @Override
     public AbstractSchema getDefaultSchema() {
